@@ -157,12 +157,11 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
         }
       }
       document.querySelector('#input_text').value = demo
-      window.setTimeout(function() {
+      loadFreq().then(x => {
         let density = getDensity(demo)
         let html = render(demo, density, gray)
         document.querySelector('#output_text').innerHTML = html
-        // renderToggles(res['pairs'])
-      }, 1000)
+      })
 
       document.querySelector('#input_text').addEventListener('keyup', function(e) {
         let density = getDensity(e.target.value)

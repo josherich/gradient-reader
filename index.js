@@ -8,7 +8,7 @@ let anchor = ''
 let maxLen = -1
 
 function loadFreq() {
-  fetch('./freq.txt')
+  return fetch('./freq.txt')
   .then(response => response.text())
   .then(text => {
     text.split('\n').map(line => addFreq(line.split(' ')))
@@ -106,4 +106,3 @@ function render(input, density, gray=5) {
   return output
 }
 
-loadFreq()
