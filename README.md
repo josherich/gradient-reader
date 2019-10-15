@@ -1,2 +1,5 @@
 # gradient-reader
-read with attention
+
+highlight less frequent words
+
+![shot](./gradient-reader.png)
