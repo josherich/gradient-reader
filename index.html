@@ -48,23 +48,38 @@
     
     <h2>Gradient Reader</h2>
     <h4>highlight less frequent word</h4>
+
+    <select name="lang" id="lang">
+      <option value="en">English</option>
+      <option value="cn">Chinese</option>
+    </select>
+
     <textarea name="" id="input_text" cols="30" rows="10"></textarea>
     <div class="main">
       <div class="toggles"></div>
       <div id="output_text"></div>
     </div>
 
-    <div class="templates" style="display: none;">
-      <div class="word-toggle">
-        <input type="checkbox" id="" name="">
-        <label for=""></label>
-      </div>
-    </div>
 
     <script type="text/javascript" src="./index.js"></script>
 
     <script>
-      let demo = `依然在应付欧盟数据保护法案（GDPR）的公司可能需要面临更多的问题了——美国的数据保护法案很快就要出炉。
+      let lang = 'en'
+
+      let demo = {
+        en: `WASHINGTON (The Borowitz Report)—Calling it a “once-in-a-lifetime incredible deal,” Donald Trump on Friday offered recently-escaped isis fighters a group rate at the Trump National Doral Miami.
+
+“I am giving isis a group rate that entitles them to the full run of the golf course, the spa, you name it,” he said. “This is going to make the isis people very, very happy.”
+
+The fighters can qualify for the group rate by presenting proof of isis membership and their recently freed status, Trump said.
+
+Trump declined to say whether he would extend the same group rate to Kurdish fighters in Syria. “I’m not a fan of the Kurds,” he said. “Where were the Kurds in 1776 when George Washington took control of the British airports?”
+
+Shortly after Trump made the offer to isis, however, the group’s leader, Abu Bakr al-Baghdadi, issued a lukewarm response.
+
+“We’ve read some not-so-great things about the Doral on TripAdvisor,” Baghdadi said. “If we wanted to go to a golf resort, we’d pick one that doesn’t have bedbugs.”
+`,
+      cn: `依然在应付欧盟数据保护法案（GDPR）的公司可能需要面临更多的问题了——美国的数据保护法案很快就要出炉。
 
 加州消费者隐私法案（CCPA）即将于明年 1 月生效，现在只有 3 个月不到的时间去准备了。此外，以纽约州为起点，更多的法案正在美国多个州陆续生效。
 
@@ -130,7 +145,9 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
 以欧盟为例，欧盟早在 2016 年 4 月就提出了 GDPR，但并没有立即实施，而是给予了企业两年多的缓冲时间，最终于 2018 年 5 月 25 日正式实施，被称为「史上最严格的的用户个人数据保护法案」。GDPR 的处罚之严格令人咂舌，以违反个人数据的罚款额度为例，违法企业将最高面临其年营业额 4％的罚款，以目前最高者为准，即 2000 万欧元（约合人民币 1.56 亿）。
 
 在个人数据保护的全球浪潮中，中国也无法置身事外。中国也在数据保护立法上持续做出努力。早在 2003 年，国务院信息化办公室就已经开始展开个人信息保护法立法研究工作，并于 2005 年形成专家意见稿；2009 年中华人民共和国刑法修正案（七）对窃取、出售或非法提供给他人的行为作出「情节严重的，处三年以下有期徒刑或拘役，并处或单处罚金」的规定，之后 2015 年的刑法修正案（九）又对非法获取公民个人信息的罪名做了补充；2017 年 12 月 29 日，全国信息安全标准化技术委员会正式发布《信息安全技术个人信息安全规范》，从信息权利保护的角度全面规定了公民个人信息的收集、保存、使用、委托处理、共享、转让、公开披露以及个人信息安全的处置等。`
-      let gray = 3.5
+}
+
+      let gray = 6
       function renderToggles(pairs) {
         let toggles = document.querySelector('.toggles')
         toggles.innerHTML = ""
@@ -156,16 +173,27 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
           toggles.appendChild(tog)
         }
       }
-      document.querySelector('#input_text').value = demo
+
+      document.querySelector('#input_text').value = demo[lang]
       loadFreq().then(x => {
-        let density = getDensity(demo)
-        let html = render(demo, density, gray)
+        let density = getDensity(demo[lang])
+        let html = render(demo[lang], density, gray)
         document.querySelector('#output_text').innerHTML = html
       })
 
       document.querySelector('#input_text').addEventListener('keyup', function(e) {
         let density = getDensity(e.target.value)
         let html = render(e.target.value, density, gray)
+        document.querySelector('#output_text').innerHTML = html
+        // renderToggles(res['pairs'])
+      })
+
+      document.querySelector('#lang').addEventListener('change', function(e) {
+        lang = e.target.value
+        document.querySelector('#input_text').value = demo[lang]
+        let text = document.querySelector('#input_text').value
+        let density = getDensity(text)
+        let html = render(text, density, gray)
         document.querySelector('#output_text').innerHTML = html
         // renderToggles(res['pairs'])
       })
