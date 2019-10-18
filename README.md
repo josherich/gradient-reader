@@ -2,10 +2,15 @@
 
 highlight less frequent words
 
+## Updates
+
+- 2019.10.18 support English
+
 ## TODOs
 
-- support English
+- ~~support English~~
 - highlight using neural language models
 - highlight(toggle) name entities
 
-![shot](./gradient-reader.png)
+![shot-en](./gradient-reader-en.png)
+![shot-cn](./gradient-reader.png)
