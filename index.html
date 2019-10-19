@@ -14,23 +14,29 @@
       .main {
         position: relative;
         line-height: 1.6em;
-        width: 900px;
+        max-width: 900px;
         margin: auto;
         margin-bottom: 80px;
       }
       #input_text {
         font-size: 18px;
         display: block;
-        width: 900px;
+        width: 100%;
+        max-width: 900px;
         margin: auto;
-        margin-top: 40px;
+        margin-top: 10px;
+        padding: 20px;
+        box-sizing: border-box;
       }
       #output_text {
+        font-size: 14px;
         text-align: left;
-        width: 900px;
         margin: auto;
         margin-top: 40px;
         white-space: pre-wrap;
+      }
+      #output_text span {
+        font-size: 14px;
       }
       .toggles {
         text-align: left;
@@ -38,6 +44,9 @@
       .word-toggle {
         display: inline-block;
         margin-right: 20px;
+      }
+      .slider {
+        vertical-align: middle;
       }
     </style>
   </head>
@@ -53,6 +62,10 @@
       <option value="en">English</option>
       <option value="cn">Chinese</option>
     </select>
+    
+    <div>
+      alpha: <input type="range" min="10" max="70" value="50" class="slider" id="gray_range">
+    </div>
 
     <textarea name="" id="input_text" cols="30" rows="10"></textarea>
     <div class="main">
@@ -61,7 +74,7 @@
     </div>
 
 
-    <script type="text/javascript" src="./index.js"></script>
+    <script type="text/javascript" src="./index.js?hash=sdfsdf"></script>
 
     <script>
       let lang = 'en'
@@ -185,7 +198,6 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
         let density = getDensity(e.target.value)
         let html = render(e.target.value, density, gray)
         document.querySelector('#output_text').innerHTML = html
-        // renderToggles(res['pairs'])
       })
 
       document.querySelector('#lang').addEventListener('change', function(e) {
@@ -195,8 +207,16 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
         let density = getDensity(text)
         let html = render(text, density, gray)
         document.querySelector('#output_text').innerHTML = html
-        // renderToggles(res['pairs'])
       })
+
+      document.querySelector('#gray_range').addEventListener('change', function(e) {
+        let gray = parseFloat(e.target.value/10)
+        let text = document.querySelector('#input_text').value
+        let density = getDensity(text)
+        let html = render(text, density, gray)
+        document.querySelector('#output_text').innerHTML = html
+      })
+
     </script>
 
   </body>
