@@ -22,6 +22,11 @@ function loadFreq() {
   })
 }
 
+function loadPage(url) {
+  return fetch(`https://api.mindynode.com/api/parse/${encodeURIComponent(url)}`)
+  .then(response => response.json())
+}
+
 function _is_chinese_char(char) {
   let cp = char.codePointAt()
   if ((cp >= 0x4E00 && cp <= 0x9FFF) ||
@@ -78,6 +83,24 @@ function getDensity(text, cb) {
   return _is_chinese_text(text) ? getDensityCN(text, cb) : getDensityEN(text, cb);
 }
 
+function escapeText(text) {
+  return text
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function unescapeText(unsafe) {
+  return unsafe
+   .replace(/&amp;/g, "&")
+   .replace(/&lt;/g, "<")
+   .replace(/&gt;/g, ">")
+   .replace(/&quot;/g, '"')
+   .replace(/&#039;/g, "'")
+}
+
 function getDensityEN(text, cb) {
   let density = []
   for (let i = 0; i < text.length;) {
@@ -89,7 +112,7 @@ function getDensityEN(text, cb) {
       // remove prefix, suffix puncs
       let token = text.slice(i, end == -1 ? text.length : i+end)
       let matches = token.match(/[\w-]+/)
-      if (matches.length == 0) {
+      if (!matches) {
         console.log(`error in matching token: ${token}, ${i} - ${i+end}`)
       } else {
         // add to density

@@ -48,6 +48,31 @@
       .slider {
         vertical-align: middle;
       }
+      .url-input {
+        display: flex;
+        max-width: 900px;
+        margin: auto;
+      }
+      #url {
+        flex: 9;
+        padding: 4px 8px;
+        font-size: 18px;
+        margin: 10px 0;
+      }
+      #load {
+        flex: 1;
+        margin: 10px 0;
+        margin-left: 10px;
+        color: #333;
+        font-size: 16px;
+        background: white;
+        -webkit-appearance: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .alpha-input {
+
+      }
     </style>
   </head>
 
@@ -57,14 +82,21 @@
     
     <h2>Gradient Reader</h2>
     <h4>highlight less frequent word</h4>
-
-    <select name="lang" id="lang">
-      <option value="en">English</option>
-      <option value="cn">Chinese</option>
-    </select>
     
     <div>
-      alpha: <input type="range" min="10" max="70" value="50" class="slider" id="gray_range">
+      Examples:
+      <select name="lang" id="lang">
+        <option value="en">English demo</option>
+        <option value="cn">Chinese demo</option>
+      </select>
+    </div>
+    
+    <div class="alpha-input">
+      Alpha: <input type="range" min="10" max="70" value="50" class="slider" id="gray_range">
+    </div>
+
+    <div class="url-input">
+      <input type="text" id="url" value="https://core.telegram.org/bots"><button id="load">load</button>
     </div>
 
     <textarea name="" id="input_text" cols="30" rows="10"></textarea>
@@ -161,6 +193,9 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
 }
 
       let gray = 6
+      let density = []
+      let text = null
+
       function renderToggles(pairs) {
         let toggles = document.querySelector('.toggles')
         toggles.innerHTML = ""
@@ -188,14 +223,15 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
       }
 
       document.querySelector('#input_text').value = demo[lang]
+      text = demo[lang]
       loadFreq().then(x => {
-        let density = getDensity(demo[lang])
-        let html = render(demo[lang], density, gray)
+        density = getDensity(text)
+        let html = render(text, density, gray)
         document.querySelector('#output_text').innerHTML = html
       })
 
       document.querySelector('#input_text').addEventListener('keyup', function(e) {
-        let density = getDensity(e.target.value)
+        density = getDensity(e.target.value)
         let html = render(e.target.value, density, gray)
         document.querySelector('#output_text').innerHTML = html
       })
@@ -203,18 +239,34 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
       document.querySelector('#lang').addEventListener('change', function(e) {
         lang = e.target.value
         document.querySelector('#input_text').value = demo[lang]
-        let text = document.querySelector('#input_text').value
-        let density = getDensity(text)
+        text = demo[lang]
+        density = getDensity(text)
         let html = render(text, density, gray)
         document.querySelector('#output_text').innerHTML = html
       })
 
       document.querySelector('#gray_range').addEventListener('change', function(e) {
         let gray = parseFloat(e.target.value/10)
-        let text = document.querySelector('#input_text').value
-        let density = getDensity(text)
         let html = render(text, density, gray)
         document.querySelector('#output_text').innerHTML = html
+      })
+
+      document.querySelector('#load').addEventListener('click', function(e) {
+        let uri = document.querySelector('#url').value
+        loadPage(uri)
+          .then(data => {
+            text = data['content']
+            document.querySelector('#input_text').value = text
+            let temp = document.createElement('div')
+            temp.innerHTML = text
+            text = escapeText(temp.textContent)
+            density = getDensity(text)
+            let html = render(text, density, gray)
+            document.querySelector('#output_text').innerHTML = html
+          })
+          .catch(err => {
+            document.querySelector('#output_text').innerHTML = `<h6>Invalid URL: ${err}</h6>`
+          })
       })
 
     </script>
