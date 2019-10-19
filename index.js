@@ -83,6 +83,12 @@ function getDensity(text, cb) {
   return _is_chinese_text(text) ? getDensityCN(text, cb) : getDensityEN(text, cb);
 }
 
+function preprocessText(text) {
+  return text
+    .replace(/<p>/g, '\n<p>')
+    .replace(/<\/p>/g, '</p>\n')
+}
+
 function escapeText(text) {
   return text
     .replace(/</g, '&lt;')

@@ -96,7 +96,7 @@
     </div>
 
     <div class="url-input">
-      <input type="text" id="url" value="https://core.telegram.org/bots"><button id="load">load</button>
+      <input type="text" id="url" value="https://thehill.com/policy/finance/465906-universal-basic-income-advocates-warn-yangs-freedom-dividend-would-harm-low-income-americans"><button id="load">load</button>
     </div>
 
     <textarea name="" id="input_text" cols="30" rows="10"></textarea>
@@ -231,8 +231,13 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
       })
 
       document.querySelector('#input_text').addEventListener('keyup', function(e) {
-        density = getDensity(e.target.value)
-        let html = render(e.target.value, density, gray)
+        text = e.target.value
+        let temp = document.createElement('div')
+        temp.innerHTML = preprocessText(text)
+        text = escapeText(temp.textContent)
+
+        density = getDensity(text)
+        let html = render(text, density, gray)
         document.querySelector('#output_text').innerHTML = html
       })
 
@@ -258,7 +263,7 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
             text = data['content']
             document.querySelector('#input_text').value = text
             let temp = document.createElement('div')
-            temp.innerHTML = text
+            temp.innerHTML = preprocessText(text)
             text = escapeText(temp.textContent)
             density = getDensity(text)
             let html = render(text, density, gray)
