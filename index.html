@@ -260,7 +260,7 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
         let uri = document.querySelector('#url').value
         loadPage(uri)
           .then(data => {
-            text = data['content']
+            text = data['text']
             document.querySelector('#input_text').value = text
             let temp = document.createElement('div')
             temp.innerHTML = preprocessText(text)

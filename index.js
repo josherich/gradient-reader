@@ -23,8 +23,11 @@ function loadFreq() {
 }
 
 function loadPage(url) {
-  return fetch(`https://api.mindynode.com/api/parse/${encodeURIComponent(url)}`)
+  return fetch(`https://api.mindynode.com/api/entity/${encodeURIComponent(url)}`)
   .then(response => response.json())
+  .then(data => {
+    return data['objects'][0]
+  })
 }
 
 function _is_chinese_char(char) {
