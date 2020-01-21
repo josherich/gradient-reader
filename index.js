@@ -7,19 +7,65 @@ let wmap = {}
 // maxlen for chinese
 let maxLen = -1
 
-function loadFreq() {
-  return fetch('./freq.txt')
-  .then(response => response.text())
-  .then(text => {
-    text.split('\n').map(line => addFreq(line.split(' ')))
-  })
-  .then(() => {
+function loadFreq(text) {
+  let is_cn = _is_chinese_char(text)
+  if ( is_cn && Object.keys(fmap).length === 0) {
+    return fetch('./freq.txt')
+    .then(response => response.text())
+    .then(text => {
+      text.split('\n').map(line => addFreq(line.split(' ')))
+    })
+  }
+  if (!is_cn && Object.keys(wmap).length === 0) {
     return fetch('./enwiki-20190320-words-frequency-fmap.txt')
+    .then(response => response.text())
+    .then(text => {
+      text.split('\n').map(line => addFreqEN(line.split(' ')))
+    })
+  }
+  return Promise.resolve()
+}
+
+function debounce(func, wait, immediate) {
+  let timeout;
+
+  return function executedFunction() {
+    let context = this;
+    let args = arguments;
+
+    let later = function() {
+      timeout = null;
+      if (!immediate) func.apply(context, args);
+    };
+
+    let callNow = immediate && !timeout;
+
+    clearTimeout(timeout);
+
+    timeout = setTimeout(later, wait);
+
+    if (callNow) func.apply(context, args);
+  };
+};
+
+function getIndexing(text, density) {
+  let indexing = {}
+  let is_cn = _is_chinese_char(text)
+  let thred = is_cn ? 12 : 15
+
+  density.filter(e => {
+    return e[3] < thred && e[3] !== -1
+  }).sort((a, b) => {
+    return a[3] - b[3]
+  }).map(e => {
+    if (indexing[e[2]]) {
+      indexing[e[2]].push([e[0], e[1], e[3]])
+    } else {
+      indexing[e[2]] = [[e[0], e[1], e[3]]]
+    }
   })
-  .then(response => response.text())
-  .then(text => {
-    text.split('\n').map(line => addFreqEN(line.split(' ')))
-  })
+
+  return indexing
 }
 
 function loadPage(url) {
@@ -111,19 +157,25 @@ function getDensityEN(text, cb) {
   let density = []
   for (let i = 0; i < text.length;) {
     let char = text[i]
-    let end = text.slice(i, text.length).search(/\s/)
+
+    if (['"', '“', '”', ',', '.'].includes(char)) {
+      i++
+      continue
+    }
+
+    let end = text.slice(i, text.length).search(/[\s?“”,."]/)
     let skip = end + 1
 
     if (char.search(/\s/) == -1) {
       // remove prefix, suffix puncs
       let token = text.slice(i, end == -1 ? text.length : i+end)
-      let matches = token.match(/[\w-]+/)
+      let matches = token.match(/[\w-'’]+/)
       if (!matches) {
         console.log(`error in matching token: ${token}, ${i} - ${i+end}`)
       } else {
         // add to density
-        let freq = wmap[matches[0].toLowerCase()] || 10
-        density.push([i, i+end-1, token, freq])
+        let freq = wmap[matches[0].toLowerCase()] || -1
+        density.push([i, i+end-1, token, parseInt(freq)])
       }
 
       // skip to next
@@ -139,7 +191,7 @@ function getDensityEN(text, cb) {
 function getDensityCN(s, cb) {
   let parent = fmap
   let density = []
-  
+
   for (let i = 0; i < s.length; i++) {
     let found = false
     let skip = 0
@@ -206,7 +258,7 @@ function render(input, density, gray=5) {
     let [start, end, word, val] = density[i]
     let grey = (denom - (val - min)) / denom / gray
     output += input.slice(prev, start)
-    output += `<span style="display: inline-block; background: rgba(0,0,0,${grey}); box-shadow: inset 0px 0px 8px 3px rgb(255, 255, 255);">` + input.slice(start, end+1) + `</span>`
+    output += `<span class="gray-tag" style="background: rgba(0,0,0,${grey});" data-start="${start}">` + input.slice(start, end+1) + `</span>`
     prev = end + 1
   }
   // output += `\n ${min}, ${max}`

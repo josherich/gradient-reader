@@ -11,6 +11,11 @@
         font-size: 18px;
         text-align: center;
       }
+      ul, li {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
       .main {
         position: relative;
         line-height: 1.6em;
@@ -27,6 +32,7 @@
         margin-top: 10px;
         padding: 20px;
         box-sizing: border-box;
+        border: 1px solid #ccc;
       }
       #output_text {
         font-size: 16px;
@@ -58,6 +64,7 @@
         padding: 4px 8px;
         font-size: 18px;
         margin: 10px 0;
+        border: 1px solid #ccc;
       }
       #load {
         flex: 1;
@@ -67,11 +74,52 @@
         font-size: 16px;
         background: white;
         -webkit-appearance: none;
+        border: 1px solid #ccc;
         border-radius: 3px;
         cursor: pointer;
       }
-      .alpha-input {
-
+      .config-alpha, .config-lang {
+        text-align: left;
+        display: flex;
+        max-width: 900px;
+        margin: 2em auto;
+      }
+      .config-alpha label, .config-lang label {
+        margin-right: .5em;
+      }
+      .gray-tag {
+        display: inline-block;
+        box-shadow: inset 0px 0px 8px 3px rgb(255, 255, 255);
+        transition: box-shadow 1s;
+      }
+      .highlight {
+        font-weight: bold;
+        background: rgba(0, 130, 250, 0.8) !important;
+        box-shadow: inset 0px 0px 8px 3px rgba(0, 130, 250, 0.8);
+      }
+      #index {
+        font-size: 0.8em;
+        line-height: 1em;
+        width: 220px;
+        height: 640px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        position: fixed;
+        top: 80px;
+        right: 40px;
+        text-align: left;
+        color: #bbb;
+      }
+      #index li {
+        margin: 6px 0;
+      }
+      #index li span {
+        display: inline-block;
+        margin-left: 5px;
+        cursor: pointer;
+      }
+      #index h5 {
+        margin: 1em 0;
       }
     </style>
   </head>
@@ -79,20 +127,20 @@
   <body class="">
 
     <a href="https://github.com/josherich/gradient-reader"><img style="position: absolute; top: 0; left: 0; border: 0;z-index: 10;cursor: pointer;" src="https://s3.amazonaws.com/github/ribbons/forkme_left_gray_6d6d6d.png" alt="Fork me on GitHub"></a>
-    
+
     <h2>Gradient Reader</h2>
     <h4>highlight less frequent word</h4>
-    
-    <div>
-      Examples:
+
+    <div class="config-lang">
+      <label for="lang">Examples:</label>
       <select name="lang" id="lang">
         <option value="en">English demo</option>
         <option value="cn">Chinese demo</option>
       </select>
     </div>
-    
-    <div class="alpha-input">
-      Alpha: <input type="range" min="10" max="70" value="50" class="slider" id="gray_range">
+
+    <div class="config-alpha">
+      <label for="gray_range">Alpha: </label><input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
     </div>
 
     <div class="url-input">
@@ -103,6 +151,10 @@
     <div class="main">
       <div class="toggles"></div>
       <div id="output_text"></div>
+      <div id="index">
+        <h5>Index: </h6>
+        <ul></ul>
+      </div>
     </div>
 
 
@@ -222,12 +274,41 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
         }
       }
 
-      document.querySelector('#input_text').value = demo[lang]
-      text = demo[lang]
-      loadFreq().then(x => {
+      let renderDensity = debounce(function(text) {
         density = getDensity(text)
         let html = render(text, density, gray)
+        let indexing = getIndexing(text, density)
         document.querySelector('#output_text').innerHTML = html
+
+        document.querySelector('#index ul').innerHTML = ""
+        for (let k in indexing) {
+          let el = document.createElement('li')
+          let occ = indexing[k]
+          el.textContent = k
+
+          for (let i = 0; i < occ.length; i++) {
+            let occEl = document.createElement('span')
+            occEl.addEventListener('click', (e) => {
+              let targ = document.querySelector(`.gray-tag[data-start="${occ[i][0]}"]`)
+              targ.classList.add('highlight')
+              setTimeout(e => {
+                targ.classList.remove('highlight')
+              }, 1000)
+              targ.scrollIntoView()
+            })
+            occEl.textContent = `${i+1}`
+            el.appendChild(occEl)
+          }
+          document.querySelector('#index ul').appendChild(el)
+        }
+
+      }, 500)
+
+      document.querySelector('#input_text').value = demo[lang]
+      text = demo[lang]
+
+      loadFreq(text).then(_ => {
+        renderDensity(demo[lang])
       })
 
       document.querySelector('#input_text').addEventListener('keyup', function(e) {
@@ -236,18 +317,18 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
         temp.innerHTML = preprocessText(text)
         text = escapeText(temp.textContent)
 
-        density = getDensity(text)
-        let html = render(text, density, gray)
-        document.querySelector('#output_text').innerHTML = html
+        loadFreq(text).then(_ => {
+          renderDensity(text)
+        })
       })
 
       document.querySelector('#lang').addEventListener('change', function(e) {
         lang = e.target.value
         document.querySelector('#input_text').value = demo[lang]
         text = demo[lang]
-        density = getDensity(text)
-        let html = render(text, density, gray)
-        document.querySelector('#output_text').innerHTML = html
+        loadFreq(text).then(_ => {
+          renderDensity(text)
+        })
       })
 
       document.querySelector('#gray_range').addEventListener('change', function(e) {
@@ -265,9 +346,8 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
             let temp = document.createElement('div')
             temp.innerHTML = preprocessText(text)
             text = escapeText(temp.textContent)
-            density = getDensity(text)
-            let html = render(text, density, gray)
-            document.querySelector('#output_text').innerHTML = html
+
+            renderDensity(text)
           })
           .catch(err => {
             document.querySelector('#output_text').innerHTML = `<h6>Invalid URL: ${err}</h6>`
