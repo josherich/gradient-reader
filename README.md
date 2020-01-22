@@ -4,7 +4,8 @@ highlight less frequent words
 
 ## Updates
 
-- 2019.10.18 support English
+- 2020.01.21 fix: should skip quotes
+- 2019.10.18 support: English
 
 ## TODOs
 
