@@ -7,21 +7,17 @@ let wmap = {}
 // maxlen for chinese
 let maxLen = -1
 
-function loadFreq(text) {
+async function loadFreq(text) {
   let is_cn = _is_chinese_char(text)
   if ( is_cn && Object.keys(fmap).length === 0) {
-    return fetch('./freq.txt')
-    .then(response => response.text())
-    .then(text => {
-      text.split('\n').map(line => addFreq(line.split(' ')))
-    })
+    const response = await fetch('./freq.txt')
+    const text_1 = await response.text()
+    text_1.split('\n').map(line => addFreq(line.split(' ')))
   }
   if (!is_cn && Object.keys(wmap).length === 0) {
-    return fetch('./enwiki-20190320-words-frequency-fmap.txt')
-    .then(response => response.text())
-    .then(text => {
-      text.split('\n').map(line => addFreqEN(line.split(' ')))
-    })
+    const response_1 = await fetch('./enwiki-20190320-words-frequency-fmap.txt')
+    const text_2 = await response_1.text()
+    text_2.split('\n').map(line_1 => addFreqEN(line_1.split(' ')))
   }
   return Promise.resolve()
 }
@@ -68,9 +64,9 @@ function getIndexing(text, density) {
   return indexing
 }
 
-function loadPage(url) {
-  return fetch(`https://api.mindynode.com/api/parse/${encodeURIComponent(url)}`)
-  .then(response => response.json())
+async function loadPage(url) {
+  const response = await fetch(`https://api.mindynode.com/api/parse/${encodeURIComponent(url)}`)
+  return await response.json()
 }
 
 function _is_chinese_char(char) {
@@ -265,3 +261,197 @@ function render(input, density, gray=5) {
   return output
 }
 
+// =============== main ===============
+let lang = 'en'
+
+let demo = {
+  en: `WASHINGTON (The Borowitz Report)—Calling it a “once-in-a-lifetime incredible deal,” Donald Trump on Friday offered recently-escaped isis fighters a group rate at the Trump National Doral Miami.
+
+“I am giving isis a group rate that entitles them to the full run of the golf course, the spa, you name it,” he said. “This is going to make the isis people very, very happy.”
+
+The fighters can qualify for the group rate by presenting proof of isis membership and their recently freed status, Trump said.
+
+Trump declined to say whether he would extend the same group rate to Kurdish fighters in Syria. “I’m not a fan of the Kurds,” he said. “Where were the Kurds in 1776 when George Washington took control of the British airports?”
+
+Shortly after Trump made the offer to isis, however, the group’s leader, Abu Bakr al-Baghdadi, issued a lukewarm response.
+
+“We’ve read some not-so-great things about the Doral on TripAdvisor,” Baghdadi said. “If we wanted to go to a golf resort, we’d pick one that doesn’t have bedbugs.”
+`,
+cn: `依然在应付欧盟数据保护法案（GDPR）的公司可能需要面临更多的问题了——美国的数据保护法案很快就要出炉。
+
+加州消费者隐私法案（CCPA）即将于明年 1 月生效，现在只有 3 个月不到的时间去准备了。此外，以纽约州为起点，更多的法案正在美国多个州陆续生效。
+
+CCPA 法案和 GDPR 类似，不论公司的地理位置在哪里，只要公司服务的消费者群体有加州和纽约州居民，则公司必须遵守法律，否则会遭到罚款。
+
+GDPR 在欧洲生效后，互联网行业已经被罚款了无数次。第一年，超过 90,000 的商业公司主动报告了数据漏洞，以便符合 GDPR 的要求。同时，还有超过 145000 起消费者投诉。
+
+在 2019 年 1 月，谷歌向法国当局支付了 5000 万欧元的罚款，因为它在定向广告投放上没有说明清楚对个人数据的收集和使用问题。而更早之前，一家葡萄牙医院因其糟糕的病历记录管理支付了 40 万欧元。这家医院贪图方便，创建了 1000 个医生级别的管理账户。
+
+这还不是全部，GDPR 在线执法追踪工具可以捕捉网上所有的违法行为，包括一个正在审核的，针对英国航空公司的 2.04 亿 欧元罚款，因为公司泄露了 50 万旅客的支付信息。
+
+相比「史上最严」的 GDPR，CCPA 是什么？
+CCPA，据其官网介绍，是一个隐私保护条例，用于保护个人数据，是美国加利福尼亚州出台的地方法律。这一法律其实是 2018 年通过的，帮助消费者在访问、删除和分享企业收集到的个人数据上赋予了新的权利。
+
+具体而言，收集消费者数据的企业必须披露收集的信息、收集信息的商业目的、以及会共享这些信息的所有第三方组织和机构。而企业需依据消费者提出的正式要求删除相关信息，如果消费者有这样的需求。此外，消费者可选择出售他们的信息，而企业则不能随意改变价格或服务水平。对于允许收集其个人信息的消费者，企业可提供「财务激励」。
+
+根据 CCPA 的规定，加州居民可以获得对个人数据相关的很多权利。主要包括：
+
+1. 数据访问权
+
+2. 数据删除权
+
+3. 不被歧视的权利
+
+4. 在产品页面挂出明显的「不出售个人信息」选项，并纰漏新的隐私政策
+
+5. 未成年人和监护人授权
+
+6. 私人诉讼权
+
+除了数据隐私保护这一目的，CCPA 还希望帮助公众了解他们的什么数据会被收集，而且这些数据会被怎样出售或公开。
+
+和 GDPR 类似，CCPA 要求任何和加州居民发生业务往来的公司都要遵守这一法律，不存在属地管辖的原则。这无疑会给很多非美国的海外企业带来影响。
+
+对比GDPR
+
+那么，CCPA 和 GDPR 有什么关系呢？
+
+CCPA 和 GDPR 最大的不同在于，CCPA 在适用监管的标准上比 GDPR 更宽松，但是一旦满足被监管的标准，违法企业收到的惩罚更大。
+
+二者具体有以下不同：
+
+1. GDPR 没有对法案适用的企业进行规定，因此所有有业务的企业都会被监管。但是 CCPA 不会对年营业额在 2500 万美元以下、且不涉及的超过 50000 以上用户的数据处理的商业行为进行监管，即使已经发现了数据泄露。
+
+2. 但是，一旦满足了上述条件且发生了数据泄露问题，CCPA 的处罚比 GDPR 要严厉得多。即使是无意中发生了泄露，CCPA 规定每位用户 100 到 750 美元，或者以泄露造成的实际损失计算罚款。因此对于一些公司而言，很可能罚款会使其直接破产。而 GDPR 的罚款上限是企业收入的 4%。
+
+仅有 2％的企业做好了准备
+根据 CCPA 的法律规定，无论企业在美国以何种方式经营业务或提供服务，加利福尼亚州和纽约州的强制性隐私保护法将保障消费者自身及客户的隐私权。
+
+然而，值得关注的是，离 2020 年 1 月 1 日正式实施 CCPA 还有不到三个月的时间，那么美国企业是否已经做好相应准备了呢？
+
+2019 年 8 月份，IAPP/OneTrust 主要对美国企业的员工（各种规模）进行了 CCPA 准备度（CCPA Readiness）调查，结果显示，74％的受访者认为他们的雇主应该遵守加州即将实施的隐私法，但遗憾的是，只有大约 2％的受访者认为他们的企业已经完全做好了应对 CCPA 的准备。
+
+美国数据隐私保护法案来临，明年1月生效，现仅2%企业合规
+
+IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问题是：你希望自己所在的企业什么时候可以完全遵守 CCPA？在 2019 年 4 月的调查中，企业现已或者可于 2020 年 1 月 1 日之前完全遵守 CCPA 的比例占 55％，而奇怪的是，在 8 月的调查中，这一比例却降到了 49％。这是否说明了企业对 CCPA 的态度呢？
+
+所以，即使企业现在认为这些隐私法不适用于自身，但相关标准的应用是不可避免的。此外，虽然存在法律的不适用，但如果企业违反或损害了相关标准，也会追究它们的民事责任。无论如何，这些法律在美国和世界各地的不断推出，为法官处理企业与受影响客户之间的直接纠纷（未经法律检验）设定了一个标准。归根结底，保护客户的隐私有助于他们增加对企业的信任以及企业自身业务和品牌的发展，而这些的价值要远远高于企业因违反隐私法而要缴纳的罚款。
+
+数据保护刻不容缓
+随着大数据时代的不断发展，用户的隐私遭到侵犯甚至用于不当牟利的情况层出不穷，并且各国有关数据隐私的立法往往跟不上互联网的发展速度。所以，为了改变这种用户数据遭滥用和隐私遭侵犯的现象，世界各国在数据立法上不断地进行改善，从而予以企业更多的监管，使用户数据得到更多更全的保障。
+
+以欧盟为例，欧盟早在 2016 年 4 月就提出了 GDPR，但并没有立即实施，而是给予了企业两年多的缓冲时间，最终于 2018 年 5 月 25 日正式实施，被称为「史上最严格的的用户个人数据保护法案」。GDPR 的处罚之严格令人咂舌，以违反个人数据的罚款额度为例，违法企业将最高面临其年营业额 4％的罚款，以目前最高者为准，即 2000 万欧元（约合人民币 1.56 亿）。
+
+在个人数据保护的全球浪潮中，中国也无法置身事外。中国也在数据保护立法上持续做出努力。早在 2003 年，国务院信息化办公室就已经开始展开个人信息保护法立法研究工作，并于 2005 年形成专家意见稿；2009 年中华人民共和国刑法修正案（七）对窃取、出售或非法提供给他人的行为作出「情节严重的，处三年以下有期徒刑或拘役，并处或单处罚金」的规定，之后 2015 年的刑法修正案（九）又对非法获取公民个人信息的罪名做了补充；2017 年 12 月 29 日，全国信息安全标准化技术委员会正式发布《信息安全技术个人信息安全规范》，从信息权利保护的角度全面规定了公民个人信息的收集、保存、使用、委托处理、共享、转让、公开披露以及个人信息安全的处置等。`
+}
+
+let gray = 6
+let density = []
+let text = null
+
+function renderToggles(pairs) {
+  let toggles = document.querySelector('.toggles')
+  toggles.innerHTML = ""
+  for (let k in pairs) {
+    let tog = document.querySelector('.word-toggle').cloneNode(true)
+    tog.querySelector('input').setAttribute('id', k)
+    tog.querySelector('input').setAttribute('name', k)
+    tog.querySelector('input').setAttribute('checked', true)
+    tog.querySelector('label').setAttribute('for', k)
+    tog.querySelector('label').textContent = pairs[k].join('/')
+    tog.querySelector('input').addEventListener('click', function(e) {
+      console.log(e.target.checked)
+      let s = document.querySelector('#output_text').textContent
+      if (e.target.checked) {
+        let reg = new RegExp(k, 'g')
+        s = s.replace(reg, pairs[k][1])
+      } else {
+        let reg = new RegExp(pairs[k][1], 'g')
+        s = s.replace(reg, pairs[k][0])
+      }
+      document.querySelector('#output_text').textContent = s
+    })
+    toggles.appendChild(tog)
+  }
+}
+
+let renderDensity = debounce(function(text) {
+  density = getDensity(text)
+  console.log(density)
+  let html = render(text, density, gray)
+  let indexing = getIndexing(text, density)
+  document.querySelector('#output_text').innerHTML = html
+
+  document.querySelector('#index ul').innerHTML = ""
+  for (let k in indexing) {
+    let el = document.createElement('li')
+    let occ = indexing[k]
+    el.textContent = k
+
+    for (let i = 0; i < occ.length; i++) {
+      let occEl = document.createElement('span')
+      occEl.addEventListener('click', (e) => {
+        let targ = document.querySelector(`.gray-tag[data-start="${occ[i][0]}"]`)
+        targ.classList.add('highlight')
+        setTimeout(e => {
+          targ.classList.remove('highlight')
+        }, 1000)
+        targ.scrollIntoView()
+      })
+      occEl.textContent = `${i+1}`
+      el.appendChild(occEl)
+    }
+    document.querySelector('#index ul').appendChild(el)
+  }
+
+}, 500)
+
+document.querySelector('#input_text').value = demo[lang]
+text = demo[lang]
+
+loadFreq(text).then(_ => {
+  renderDensity(demo[lang])
+})
+
+document.querySelector('#input_text').addEventListener('keyup', function(e) {
+  text = e.target.value
+  let temp = document.createElement('div')
+  temp.innerHTML = preprocessText(text)
+  text = escapeText(temp.textContent)
+
+  loadFreq(text).then(_ => {
+    renderDensity(text)
+  })
+})
+
+document.querySelector('#lang').addEventListener('change', function(e) {
+  lang = e.target.value
+  document.querySelector('#input_text').value = demo[lang]
+  text = demo[lang]
+  loadFreq(text).then(_ => {
+    renderDensity(text)
+  })
+})
+
+document.querySelector('#gray_range').addEventListener('change', function(e) {
+  let gray = parseFloat(e.target.value/10)
+  let html = render(text, density, gray)
+  document.querySelector('#output_text').innerHTML = html
+})
+
+document.querySelector('#load').addEventListener('click', function(e) {
+  let uri = document.querySelector('#url').value
+  loadPage(uri)
+    .then(data => {
+      text = data['content']
+      document.querySelector('#input_text').value = text
+      let temp = document.createElement('div')
+      temp.innerHTML = preprocessText(text)
+      text = escapeText(temp.textContent)
+
+      renderDensity(text)
+    })
+    .catch(err => {
+      document.querySelector('#output_text').innerHTML = `<h6>Invalid URL: ${err}</h6>`
+    })
+})
