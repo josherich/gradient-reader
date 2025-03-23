@@ -34,13 +34,6 @@
         box-sizing: border-box;
         border: 1px solid #ccc;
       }
-      #output_text {
-        font-size: 16px;
-        text-align: left;
-        margin: auto;
-        margin-top: 40px;
-        white-space: pre-wrap;
-      }
       #output_text span {
         font-size: 16px;
       }
@@ -78,11 +71,17 @@
         border-radius: 3px;
         cursor: pointer;
       }
-      .config-alpha, .config-lang {
-        text-align: left;
+      .configs {
         display: flex;
         max-width: 900px;
-        margin: 2em auto;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        margin: auto;
+      }
+      .config-alpha, .config-lang, .config-lm {
+        text-align: left;
+        flex: 1;
+        margin: 1em auto;
       }
       .config-alpha label, .config-lang label {
         margin-right: .5em;
@@ -101,9 +100,10 @@
         font-size: 0.8em;
         line-height: 1em;
         width: 220px;
-        height: 640px;
+        height: 600px;
         overflow-x: hidden;
         overflow-y: auto;
+        padding-left: 1em;
         text-align: left;
         color: #bbb;
       }
@@ -121,10 +121,17 @@
       .main {
         display: flex;
         justify-content: space-between;
+        margin-top: 1em;
       }
       #output_text {
         flex: 4;
         margin-right: 20px;
+        height: 600px;
+        overflow-y: auto;
+        font-size: 16px;
+        text-align: left;
+        margin: auto;
+        white-space: pre-wrap;
       }
       #index {
         flex: 1;
@@ -142,16 +149,25 @@
 
     <h2>Gradient Reader</h2>
 
-    <div class="config-lang">
-      <label for="lang">Examples:</label>
-      <select name="lang" id="lang">
-        <option value="en">English demo</option>
-        <option value="cn">Chinese demo</option>
-      </select>
-    </div>
+    <div class="configs">
 
-    <div class="config-alpha">
-      <label for="gray_range">Alpha: </label><input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
+      <div class="config-lang">
+        <label for="lang">Examples:</label>
+        <select name="lang" id="lang">
+          <option value="en">English demo</option>
+          <option value="cn">Chinese demo</option>
+        </select>
+      </div>
+
+      <div class="config-lm">
+        <input type="checkbox" id="use_lm" name="use_lm">
+        <label for="use_lm">Use Language Model</label>
+      </div>
+
+      <div class="config-alpha">
+        <label for="gray_range">Alpha: </label><input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
+      </div>
+
     </div>
 
     <div class="url-input">

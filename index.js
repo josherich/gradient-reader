@@ -65,8 +65,20 @@ function getIndexing(text, density) {
 }
 
 async function loadPage(url) {
-  const response = await fetch(`https://api.mindynode.com/api/parse/${encodeURIComponent(url)}`)
+  const response = await fetch(`https://api.mindynode.com/api/parser/${encodeURIComponent(url)}`)
   return await response.json()
+}
+
+async function loadLMDensity(text, isCN=false) {
+  const response = await fetch(`https://tinysaas.mindynode.com/api/attention`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({text: text, is_cn: isCN})
+  })
+  const res = await response.json()
+  return res.map(({ weight, words, positions }) => positions.map(([start, end]) => [start, end, words, weight])).flat()
 }
 
 function _is_chinese_char(char) {
@@ -121,8 +133,13 @@ function addFreq(pair) {
   parent.isEnd = true
 }
 
-function getDensity(text, cb) {
-  return _is_chinese_text(text) ? getDensityCN(text, cb) : getDensityEN(text, cb);
+async function getDensity(text, useLM=false) {
+  const isCN = _is_chinese_text(text);
+  if (useLM) {
+    return await loadLMDensity(text, isCN)
+  } else {
+    return _is_chinese_text(text) ? getDensityCN(text) : getDensityEN(text);
+  }
 }
 
 function preprocessText(text) {
@@ -149,7 +166,8 @@ function unescapeText(unsafe) {
    .replace(/&#039;/g, "'")
 }
 
-function getDensityEN(text, cb) {
+// [[start, end, token, freq]]
+function getDensityEN(text) {
   let density = []
   for (let i = 0; i < text.length;) {
     let char = text[i]
@@ -167,7 +185,7 @@ function getDensityEN(text, cb) {
       let token = text.slice(i, end == -1 ? text.length : i+end)
       let matches = token.match(/[\w-'’]+/)
       if (!matches) {
-        console.log(`error in matching token: ${token}, ${i} - ${i+end}`)
+        console.log(`error in matching token, ignored: ${token}, ${i} - ${i+end}`)
       } else {
         // add to density
         let freq = wmap[matches[0].toLowerCase()] || -1
@@ -184,19 +202,19 @@ function getDensityEN(text, cb) {
   return density
 }
 
-function getDensityCN(s, cb) {
+function getDensityCN(text) {
   let parent = fmap
   let density = []
 
-  for (let i = 0; i < s.length; i++) {
+  for (let i = 0; i < text.length; i++) {
     let found = false
     let skip = 0
     let sWord = ''
     let longest = []
 
-    for (let j = i; j < s.length; j++) {
+    for (let j = i; j < text.length; j++) {
 
-      if (!parent[s[j]]) {
+      if (!parent[text[j]]) {
         found = false
         skip = j - i
         parent = fmap
@@ -207,20 +225,20 @@ function getDensityCN(s, cb) {
         break;
       }
 
-      sWord = sWord + s[j]
-      if (parent[s[j]].isEnd) {
+      sWord = sWord + text[j]
+      if (parent[text[j]].isEnd) {
         found = true
         // cache the longest match
-        longest = [i, j, sWord, Math.log2(parseInt(parent[s[j]].val))]
+        longest = [i, j, sWord, Math.log2(parseInt(parent[text[j]].val))]
         skip = j - i
         if (skip + 1 >= maxLen) {
           break
         } else {
-          parent = parent[s[j]]
+          parent = parent[text[j]]
           continue
         }
       }
-      parent = parent[s[j]]
+      parent = parent[text[j]]
     }
 
     if (skip >= 1) {
@@ -233,14 +251,10 @@ function getDensityCN(s, cb) {
 
   }
 
-  if(typeof cb === 'function'){
-    cb(null, s)
-  }
-
   return density
 }
 
-function render(input, density, gray=5) {
+function renderContent(input, density, gray=5) {
   let output = ''
   let min = 1000, max = -1
   for (let i = 0; i < density.length; i++) {
@@ -263,19 +277,19 @@ function render(input, density, gray=5) {
 
 // =============== main ===============
 let lang = 'en'
-
+let use_lm = false;
 let demo = {
-  en: `Against Interpretation\nThe earliest experience of art must have been that it was incantatory, magical; art was an instrument of ritual. (Cf. the paintings in the caves at Lascaux, Altamira, Niaux, La Pasiega, etc.) The earliest theory of art, that of the Greek philosophers, proposed that art was mimesis, imitation of reality.
+  en: `Against Interpretation
+
+The earliest experience of art must have been that it was incantatory, magical; art was an instrument of ritual. (Cf. the paintings in the caves at Lascaux, Altamira, Niaux, La Pasiega, etc.) The earliest theory of art, that of the Greek philosophers, proposed that art was mimesis, imitation of reality.
 It is at this point that the peculiar question of the value of art arose. For the mimetic theory, by its very terms, challenges art to justify itself.
 Plato, who proposed the theory, seems to have done so in order to rule that the value of art is dubious. Since he considered ordinary material things as themselves mimetic objects, imitations of transcendent forms or structures, even the best painting of a bed would be only an “imitation of an imitation.” For Plato, art was not particularly useful (the painting of a bed is no good to sleep on nor, in the strict sense, true. And Aristotle’s arguments in defense of art do not really challenge Plato’s view that all art is an elaborate trompe l’oeil, and therefore a lie. But he does dispute Plato’s idea that art is useless. Lie or no, art has a certain value according to Aristotle because it is a form of therapy. Art is useful, after all, Aristotle counters, medicinally useful in that it arouses and purges dangerous emotions.
-In Plato and Aristotle, the mimetic theory of art goes hand in hand with the assumption that art is always figurative. But advocates of the
-The fallacy that art is necessarily a “realism” can be modified or scrapped without ever moving outside the problems delimited by the mimetic theory.
+In Plato and Aristotle, the mimetic theory of art goes hand in hand with the assumption that art is always figurative. But advocates of the mimetic theory need not close their eyes to decorative and abstract art. The fallacy that art is necessarily a “realism” can be modified or scrapped without ever moving outside the problems delimited by the mimetic theory.
 The fact is, all Western consciousness of and reflection upon art have remained within the confines staked out by the Greek theory of art as mimesis or representation. It is through this theory that art as such— above and beyond given works of art—becomes problematic, in need of defense. And it is the defense of art which gives birth to the odd vision by which something we have learned to call “form” is separated off from something we have learned to call “content,” and to the well-intentioned move which makes content essential and form accessory.
 Even in modern times, when most artists and critics have discarded the theory of art as representation of an outer reality in favor of the theory of art as subjective expression, the main feature of the mimetic theory persists. Whether we conceive of the work of art on the model of a picture (art as a picture of reality) or on the model of a statement (art as the statement of the artist), content still comes first. The content may have changed. It may now be less figurative, less lucidly realistic. But it is still assumed that a work of art is its content. Or, as it’s usually put today, that a work of art by definition says something. (“What X is saying is…,” “What X is trying to say is…,” “What X said is…” etc., etc.)
 2
 None of us can ever retrieve that innocence before all theory when art knew no need to justify itself, when one did not ask of a work of art what it said because one knew (or thought one knew) what it did. From now to the end of consciousness, we are stuck with the task of defending art. We can only quarrel with one or another means of defense. Indeed, we have an obligation to overthrow any means of defending and justifying art which becomes particularly obtuse or onerous or insensitive to contemporary needs and practice.
-This is the case, today, with the very idea of content itself. Whatever it may have been in the past, the idea of content is today mainly a hindrance, a nuisance, a subtle or not so subtle philistinism. Though the actual developments in many arts may seem to be leading us away from the idea that a work of art is primarily its content, the idea still exerts an extraordinary hegemony. I want to suggest that this is because the idea is now perpetuated in the guise of a certain way of encountering works of art thoroughly ingrained among most people who take any of the arts seriously. What the overemphasis on the idea of content entails is the
-it is the habit of approaching works of art in order to interpret them that sustains the fancy that there really is such a thing as the content of a work of art.`,
+This is the case, today, with the very idea of content itself. Whatever it may have been in the past, the idea of content is today mainly a hindrance, a nuisance, a subtle or not so subtle philistinism. Though the actual developments in many arts may seem to be leading us away from the idea that a work of art is primarily its content, the idea still exerts an extraordinary hegemony. I want to suggest that this is because the idea is now perpetuated in the guise of a certain way of encountering works of art thoroughly ingrained among most people who take any of the arts seriously. What the overemphasis on the idea of content entails is the perennial, never consummated project of interpretation. And, conversely, it is the habit of approaching works of art in order to interpret them that sustains the fancy that there really is such a thing as the content of a work of art.`,
 cn: `依然在应付欧盟数据保护法案（GDPR）的公司可能需要面临更多的问题了——美国的数据保护法案很快就要出炉。
 
 加州消费者隐私法案（CCPA）即将于明年 1 月生效，现在只有 3 个月不到的时间去准备了。此外，以纽约州为起点，更多的法案正在美国多个州陆续生效。
@@ -374,14 +388,13 @@ function renderToggles(pairs) {
   }
 }
 
-let renderDensity = debounce(function(text) {
-  density = getDensity(text)
-  console.log(density)
-  let html = render(text, density, gray)
-  let indexing = getIndexing(text, density)
-  document.querySelector('#output_text').innerHTML = html
+let renderMain = debounce(async function(text) {
+  density = await getDensity(text, use_lm)
+
+  document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
 
   document.querySelector('#index ul').innerHTML = ""
+  const indexing = getIndexing(text, density)
   for (let k in indexing) {
     let el = document.createElement('li')
     let occ = indexing[k]
@@ -409,7 +422,7 @@ document.querySelector('#input_text').value = demo[lang]
 text = demo[lang]
 
 loadFreq(text).then(_ => {
-  renderDensity(demo[lang])
+  renderMain(demo[lang])
 })
 
 document.querySelector('#input_text').addEventListener('keyup', function(e) {
@@ -419,7 +432,7 @@ document.querySelector('#input_text').addEventListener('keyup', function(e) {
   text = escapeText(temp.textContent)
 
   loadFreq(text).then(_ => {
-    renderDensity(text)
+    renderMain(text)
   })
 })
 
@@ -428,14 +441,19 @@ document.querySelector('#lang').addEventListener('change', function(e) {
   document.querySelector('#input_text').value = demo[lang]
   text = demo[lang]
   loadFreq(text).then(_ => {
-    renderDensity(text)
+    renderMain(text)
   })
 })
 
 document.querySelector('#gray_range').addEventListener('change', function(e) {
   let gray = parseFloat(e.target.value/10)
-  let html = render(text, density, gray)
+  let html = renderContent(text, density, gray)
   document.querySelector('#output_text').innerHTML = html
+})
+
+document.querySelector('#use_lm').addEventListener('change', function(e) {
+  use_lm = e.target.checked
+  renderMain(text)
 })
 
 document.querySelector('#load').addEventListener('click', function(e) {
@@ -448,7 +466,7 @@ document.querySelector('#load').addEventListener('click', function(e) {
       temp.innerHTML = preprocessText(text)
       text = escapeText(temp.textContent)
 
-      renderDensity(text)
+      renderMain(text)
     })
     .catch(err => {
       document.querySelector('#output_text').innerHTML = `<h6>Invalid URL: ${err}</h6>`
