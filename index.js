@@ -65,6 +65,7 @@ function getIndexing(text, density) {
 }
 
 async function loadPage(url) {
+  startLoading()
   const response = await fetch(`https://api.mindynode.com/api/parser/${encodeURIComponent(url)}`)
   return await response.json()
 }
@@ -389,6 +390,8 @@ function renderToggles(pairs) {
 }
 
 let renderMain = debounce(async function(text) {
+  startLoading()
+
   density = await getDensity(text, use_lm)
 
   document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
@@ -415,6 +418,8 @@ let renderMain = debounce(async function(text) {
     }
     document.querySelector('#index ul').appendChild(el)
   }
+
+  endLoading()
 
 }, 500)
 
@@ -455,6 +460,19 @@ document.querySelector('#use_lm').addEventListener('change', function(e) {
   use_lm = e.target.checked
   renderMain(text)
 })
+
+function startLoading() {
+  const btn = document.querySelector('#load')
+  btn.textContent = 'Loading...'
+  btn.disabled = true
+  setTimeout(endLoading, 10000)
+}
+
+function endLoading() {
+  const btn = document.querySelector('#load')
+  btn.textContent = 'Load'
+  btn.disabled = false
+}
 
 document.querySelector('#load').addEventListener('click', function(e) {
   let uri = document.querySelector('#url').value
