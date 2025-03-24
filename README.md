@@ -1,6 +1,8 @@
 # gradient-reader
 
-highlight interesting words
+[demo](https://josherich.github.io/gradient-reader/)
+
+Highlight interesting words
 
 ## Updates
 - 2025.03.23 add: render using language model
