@@ -114,6 +114,12 @@ fs.writeFileSync('enwiki-trie.txt', enCompressed);
 // 2.2 Chinese freq dictionary
 const cnFreq = fs.readFileSync('freq.txt', 'utf-8');
 const cnLines = cnFreq.split('\n');
+const maxLen = cnLines.reduce((max, line) => {
+  const [word, freq] = line.split(' ');
+  return Math.max(max, word.length);
+}, 0)
+
+console.log('max word length in CN dictionary: ', maxLen);
 const cnTests = [
   ['技术', 1412723],
   ['近代文学', 700]

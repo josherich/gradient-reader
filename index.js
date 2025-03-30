@@ -1,23 +1,99 @@
-// trie map for chinese
-let fmap = {}
-
-// hash map for english
-let wmap = {}
-
 // maxlen for chinese
-let maxLen = -1
+let maxLen = 10
+
+class TrieNode {
+  constructor() {
+      this.c = {};
+      this.e = false;
+      this.f = 0;
+  }
+}
+
+class Trie {
+  constructor() {
+    this.root = new TrieNode();
+  }
+  insert(word, freq) {
+    if (!word) return;
+    let n = this.root;
+    for (let i = 0; i < word.length; i++) {
+      let char = word[i];
+      if (!n.c[char]) {
+        n.c[char] = new TrieNode();
+      }
+      n = n.c[char];
+    }
+    console.assert(freq > 0, `freq should be positive, but get ${freq} from word ${word}`)
+    n.e = true;
+    n.f = freq;
+  }
+  search(word) {
+    let n = this.root
+    for (let i = 0; i < word.length; i++) {
+      let char = word[i]
+      if (!n.c[char]) {
+        return false
+      }
+      n = n.c[char]
+    }
+    return n.e ? n.f : -1
+  }
+  serialize() {
+    const dfs = (node) => {
+        let result = '';
+        for (const [char, child] of Object.entries(node.c)) {
+            result += char + dfs(child);
+        }
+        if (node.e) result += ('*'+node.f); // Mark end of a word
+        return result ? `{${result}}` : ''; // Wrap children in {}
+    };
+    return dfs(this.root);
+  }
+  static deserialize(serialized) {
+    let index = 0;
+
+    function parseNode() {
+        let node = new TrieNode;
+        while (index < serialized.length) {
+            let char = serialized[index++];
+
+            if (char === '{') {
+                continue;
+            } else if (char === '}') {
+                break;
+            } else if (char === '*') {
+                let freq = '';
+                while (/[0-9]/.test(serialized[index])) {
+                    freq += serialized[index++];
+                }
+                node.e = true;
+                node.f = parseInt(freq, 10);
+            } else {
+                node.c[char] = parseNode();
+            }
+        }
+        return node;
+    }
+    const trie = new Trie();
+    trie.root = parseNode();
+    return trie;
+  }
+}
+
+let fmap = new Trie();
+let wmap = new Trie();
 
 async function loadFreq(text) {
   let is_cn = _is_chinese_char(text)
-  if ( is_cn && Object.keys(fmap).length === 0) {
-    const response = await fetch('./freq.txt')
+  if ( is_cn && Object.keys(fmap.root.c).length === 0) {
+    const response = await fetch('./cn-trie.txt')
     const text_1 = await response.text()
-    text_1.split('\n').map(line => addFreq(line.split(' ')))
+    fmap = Trie.deserialize(text_1)
   }
-  if (!is_cn && Object.keys(wmap).length === 0) {
-    const response_1 = await fetch('./enwiki-20190320-words-frequency-fmap.txt')
+  if (!is_cn && Object.keys(wmap.root.c).length === 0) {
+    const response_1 = await fetch('./enwiki-trie.txt')
     const text_2 = await response_1.text()
-    text_2.split('\n').map(line_1 => addFreqEN(line_1.split(' ')))
+    wmap = Trie.deserialize(text_2)
   }
   return Promise.resolve()
 }
@@ -115,25 +191,6 @@ function _is_chinese_text(text) {
   return (ratio / sampleN) > 0.5
 }
 
-function addFreqEN(pair) {
-  let [word, freq] = pair
-  wmap[word] = freq
-}
-
-function addFreq(pair) {
-  let [word, freq] = pair
-  let parent = fmap
-  maxLen = Math.max(word.length, maxLen)
-
-  for (let i = 0; i < word.length; i++) {
-    if (!parent[word[i]]) parent[word[i]] = {}
-    parent = parent[word[i]]
-    // parent.isEnd = false
-  }
-  parent.val = freq
-  parent.isEnd = true
-}
-
 async function getDensity(text, useLM=false) {
   const isCN = _is_chinese_text(text);
   if (useLM) {
@@ -189,7 +246,7 @@ function getDensityEN(text) {
         console.log(`error in matching token, ignored: ${token}, ${i} - ${i+end}`)
       } else {
         // add to density
-        let freq = wmap[matches[0].toLowerCase()] || -1
+        let freq = wmap.search(matches[0].toLowerCase()) || -1
         density.push([i, i+end-1, token, parseInt(freq)])
       }
 
@@ -204,7 +261,7 @@ function getDensityEN(text) {
 }
 
 function getDensityCN(text) {
-  let parent = fmap
+  let parent = fmap.root
   let density = []
 
   for (let i = 0; i < text.length; i++) {
@@ -215,10 +272,10 @@ function getDensityCN(text) {
 
     for (let j = i; j < text.length; j++) {
 
-      if (!parent[text[j]]) {
+      if (!parent.c[text[j]]) {
         found = false
         skip = j - i
-        parent = fmap
+        parent = fmap.root
         // push the last(longest) match if exhausted
         if (longest.length > 0) {
           density.push(longest)
@@ -227,19 +284,20 @@ function getDensityCN(text) {
       }
 
       sWord = sWord + text[j]
-      if (parent[text[j]].isEnd) {
+      if (parent.c[text[j]].e) {
+        console.log('found', sWord, parent.c[text[j]].f)
         found = true
         // cache the longest match
-        longest = [i, j, sWord, Math.log2(parseInt(parent[text[j]].val))]
+        longest = [i, j, sWord, Math.log2(parseInt(parent.c[text[j]].f))]
         skip = j - i
         if (skip + 1 >= maxLen) {
           break
         } else {
-          parent = parent[text[j]]
+          parent = parent.c[text[j]]
           continue
         }
       }
-      parent = parent[text[j]]
+      parent = parent.c[text[j]]
     }
 
     if (skip >= 1) {
