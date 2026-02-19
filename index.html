@@ -1,191 +1,479 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <title>Gradient Reader</title>
-    <meta name="viewport" content="width=device-width">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-      body {
-        font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji;
-        font-size: 18px;
-        text-align: center;
+      /* ── Design tokens ───────────────────────────────────────────── */
+      :root {
+        --primary:        #4A6CF7;
+        --primary-light:  #EDF0FF;
+        --primary-hover:  #3A59E0;
+        --accent:         #D97706;
+        --accent-light:   #FEF3C7;
+        --accent-hover:   #B45309;
+        --bg:             #F4F4F1;
+        --surface:        #FFFFFF;
+        --border:         #E2E4E9;
+        --border-subtle:  #EEEEF0;
+        --text:           #18181B;
+        --text-muted:     #71717A;
+        --text-faint:     #A1A1AA;
+        --shadow-sm:      0 1px 2px rgba(0,0,0,0.06);
+        --shadow:         0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+        --radius:         10px;
+        --radius-sm:      6px;
+        --transition:     0.15s ease;
       }
-      ul, li {
-        list-style: none;
+
+      /* ── Reset / Base ────────────────────────────────────────────── */
+      *, *::before, *::after { box-sizing: border-box; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+                     Arial, sans-serif, "Apple Color Emoji";
+        font-size: 15px;
+        background: var(--bg);
+        color: var(--text);
         margin: 0;
         padding: 0;
+        -webkit-font-smoothing: antialiased;
       }
-      .main {
-        position: relative;
-        line-height: 1.6em;
-        max-width: 900px;
-        margin: auto;
-        margin-bottom: 80px;
-      }
-      #input_text {
-        font-size: 18px;
-        display: block;
-        width: 100%;
-        max-width: 900px;
-        margin: auto;
-        margin-top: 10px;
+
+      ul, li { list-style: none; margin: 0; padding: 0; }
+
+      /* ── Page header ─────────────────────────────────────────────── */
+      .page-header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
         padding: 20px;
-        box-sizing: border-box;
-        border: 1px solid #ccc;
+        text-align: center;
       }
-      #output_text span {
-        font-size: 16px;
+
+      .page-header h1 {
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.4px;
+        margin: 0 0 4px;
+        color: var(--text);
       }
-      .toggles {
-        text-align: left;
+
+      .page-header p {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin: 0;
       }
-      .word-toggle {
-        display: inline-block;
-        margin-right: 20px;
+
+      /* ── Layout container ────────────────────────────────────────── */
+      .container {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 20px 20px 80px;
       }
-      .slider {
-        vertical-align: middle;
-      }
-      .url-input {
-        display: flex;
-        max-width: 900px;
-        margin: auto;
-      }
-      #url {
-        flex: 9;
-        padding: 4px 8px;
-        font-size: 18px;
-        margin: 10px 0;
-        border: 1px solid #ccc;
-      }
-      #load {
-        flex: 1;
-        margin: 10px 0;
-        margin-left: 10px;
-        color: #333;
-        font-size: 16px;
-        background: white;
-        -webkit-appearance: none;
-        border: 1px solid #ccc;
-        border-radius: 3px;
-        cursor: pointer;
-      }
+
+      /* ── Config bar ──────────────────────────────────────────────── */
       .configs {
         display: flex;
-        max-width: 900px;
         flex-wrap: wrap;
-        justify-content: space-between;
-        margin: auto;
+        align-items: center;
+        gap: 4px 20px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        box-shadow: var(--shadow-sm);
       }
-      .config-alpha, .config-lang, .config-lm {
-        text-align: left;
-        flex: 1;
-        margin: 1em auto;
+
+      .config-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        color: var(--text-muted);
       }
-      .config-alpha label, .config-lang label {
-        margin-right: .5em;
-      }
-      .gray-tag {
-        display: inline-block;
-        box-shadow: inset 0px 0px 8px 3px rgb(255, 255, 255);
-        transition: box-shadow 1s;
-      }
-      .highlight {
-        font-weight: bold;
-        background: rgba(0, 130, 250, 0.8) !important;
-        box-shadow: inset 0px 0px 8px 3px rgba(0, 130, 250, 0.8);
-      }
-      #index {
-        font-size: 0.8em;
-        line-height: 1em;
-        width: 220px;
-        height: 600px;
-        overflow-x: hidden;
-        overflow-y: auto;
-        padding-left: 1em;
-        text-align: left;
-        color: #bbb;
-      }
-      #index li {
-        margin: 6px 0;
-      }
-      #index li span {
-        display: inline-block;
-        margin-left: 5px;
+
+      .config-item label {
+        font-weight: 500;
+        color: var(--text);
+        white-space: nowrap;
         cursor: pointer;
       }
-      #index h5 {
-        margin: 1em 0;
+
+      /* ── Form controls ───────────────────────────────────────────── */
+      select {
+        font-size: 13px;
+        font-family: inherit;
+        padding: 5px 28px 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--text);
+        outline: none;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2371717A' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 9px center;
+        transition: border-color var(--transition), box-shadow var(--transition);
       }
+
+      select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+      }
+
+      input[type="range"] {
+        accent-color: var(--primary);
+        vertical-align: middle;
+        cursor: pointer;
+        width: 110px;
+        height: 4px;
+      }
+
+      input[type="checkbox"] {
+        accent-color: var(--primary);
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+        vertical-align: middle;
+      }
+
+      /* ── URL input row ───────────────────────────────────────────── */
+      .url-input {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      #url {
+        flex: 1;
+        font-size: 13px;
+        font-family: inherit;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--text);
+        outline: none;
+        box-shadow: var(--shadow-sm);
+        transition: border-color var(--transition), box-shadow var(--transition);
+      }
+
+      #url:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light), var(--shadow-sm);
+      }
+
+      #load {
+        flex-shrink: 0;
+        padding: 8px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        color: var(--primary);
+        background: var(--primary-light);
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background var(--transition), color var(--transition);
+      }
+
+      #load:hover:not(:disabled) {
+        background: var(--primary);
+        color: #fff;
+      }
+
+      #load:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* ── Text input panel ────────────────────────────────────────── */
+      #input_text {
+        display: block;
+        width: 100%;
+        font-size: 14px;
+        font-family: inherit;
+        line-height: 1.65;
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        resize: vertical;
+        outline: none;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 12px;
+        transition: border-color var(--transition), box-shadow var(--transition);
+      }
+
+      #input_text:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light), var(--shadow-sm);
+      }
+
+      /* ── Word-toggle bar ─────────────────────────────────────────── */
+      .toggles {
+        text-align: left;
+        margin-bottom: 10px;
+        min-height: 0;
+      }
+
+      .word-toggle {
+        display: none; /* hidden template; cloned by JS */
+        align-items: center;
+        gap: 6px;
+        margin-right: 14px;
+        font-size: 13px;
+      }
+
+      /* ── Main two-column layout ──────────────────────────────────── */
       .main {
         display: flex;
-        justify-content: space-between;
-        margin-top: 1em;
+        gap: 14px;
+        align-items: flex-start;
       }
+
+      /* ── Output / reading panel ──────────────────────────────────── */
       #output_text {
-        flex: 4;
-        margin-right: 20px;
-        height: 600px;
+        flex: 1;
+        min-height: 520px;
+        max-height: 700px;
         overflow-y: auto;
         font-size: 16px;
+        line-height: 1.9;
         text-align: left;
-        margin: auto;
         white-space: pre-wrap;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 22px 26px;
+        box-shadow: var(--shadow);
+        scroll-behavior: smooth;
       }
+
+      #output_text span {
+        font-size: inherit;
+      }
+
+      /* ── Gradient word tags ──────────────────────────────────────── */
+      .gray-tag {
+        display: inline;
+        border-radius: 3px;
+        padding: 1px 1px;
+        transition: background 0.35s ease;
+      }
+
+      .highlight {
+        background: rgba(74, 108, 247, 0.18) !important;
+        outline: 2px solid rgba(74, 108, 247, 0.55);
+        outline-offset: 1px;
+        border-radius: 3px;
+        font-weight: 600;
+        transition: none;
+      }
+
+      /* ── Index sidebar ───────────────────────────────────────────── */
       #index {
+        width: 196px;
+        flex-shrink: 0;
+        max-height: 700px;
+        overflow-y: auto;
+        text-align: left;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 14px 18px;
+        box-shadow: var(--shadow-sm);
+      }
+
+      #index h5 {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-faint);
+        margin: 0 0 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      #index li {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px 0;
+        font-size: 13px;
+        color: var(--text);
+        border-bottom: 1px solid var(--border-subtle);
+        line-height: 1.4;
+      }
+
+      #index li:last-child { border-bottom: none; }
+
+      #index li span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 17px;
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--accent-light);
+        color: var(--accent);
+        border-radius: 9px;
+        cursor: pointer;
+        padding: 0 5px;
+        transition: background var(--transition), color var(--transition);
+        text-decoration: none;
+      }
+
+      #index li span:hover {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      /* ── Scrollbar polish (WebKit) ───────────────────────────────── */
+      #output_text::-webkit-scrollbar,
+      #index::-webkit-scrollbar {
+        width: 6px;
+      }
+      #output_text::-webkit-scrollbar-track,
+      #index::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #output_text::-webkit-scrollbar-thumb,
+      #index::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+
+      /* ── Loading indicator ───────────────────────────────────────── */
+      #output_text.is-loading {
+        opacity: 0.55;
+        pointer-events: none;
+      }
+
+      /* ── Legend strip ────────────────────────────────────────────── */
+      .legend {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 10px;
+        margin-left: auto;
+        width: fit-content;
+      }
+
+      .legend-bar {
+        display: flex;
+        height: 8px;
+        width: 80px;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .legend-bar span {
         flex: 1;
       }
+
+      /* ── GitHub ribbon ───────────────────────────────────────────── */
       /*!
        * "Fork me on GitHub" CSS ribbon v0.2.3 | MIT License
        * https://github.com/simonwhitaker/github-fork-ribbon-css
-       */.github-fork-ribbon{width:12.1em;height:12.1em;position:absolute;overflow:hidden;top:0;right:0;z-index:9999;pointer-events:none;font-size:13px;text-decoration:none;text-indent:-999999px}.github-fork-ribbon.fixed{position:fixed}.github-fork-ribbon:active,.github-fork-ribbon:hover{background-color:rgba(0,0,0,0)}.github-fork-ribbon:after,.github-fork-ribbon:before{position:absolute;display:block;width:15.38em;height:1.54em;top:3.23em;right:-3.23em;-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box;-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);-o-transform:rotate(45deg);transform:rotate(45deg)}.github-fork-ribbon:before{content:"";padding:.38em 0;background-color:#a00;background-image:-webkit-gradient(linear,left top,left bottom,from(rgba(0,0,0,0)),to(rgba(0,0,0,.15)));background-image:-webkit-linear-gradient(top,rgba(0,0,0,0),rgba(0,0,0,.15));background-image:-moz-linear-gradient(top,rgba(0,0,0,0),rgba(0,0,0,.15));background-image:-ms-linear-gradient(top,rgba(0,0,0,0),rgba(0,0,0,.15));background-image:-o-linear-gradient(top,rgba(0,0,0,0),rgba(0,0,0,.15));background-image:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.15));-webkit-box-shadow:0 .15em .23em 0 rgba(0,0,0,.5);-moz-box-shadow:0 .15em .23em 0 rgba(0,0,0,.5);box-shadow:0 .15em .23em 0 rgba(0,0,0,.5);pointer-events:auto}.github-fork-ribbon:after{content:attr(data-ribbon);color:#fff;font:700 1em "Helvetica Neue",Helvetica,Arial,sans-serif;line-height:1.54em;text-decoration:none;text-shadow:0 -.08em rgba(0,0,0,.5);text-align:center;text-indent:0;padding:.15em 0;margin:.15em 0;border-width:.08em 0;border-style:dotted;border-color:#fff;border-color:rgba(255,255,255,.7)}.github-fork-ribbon.left-bottom,.github-fork-ribbon.left-top{right:auto;left:0}.github-fork-ribbon.left-bottom,.github-fork-ribbon.right-bottom{top:auto;bottom:0}.github-fork-ribbon.left-bottom:after,.github-fork-ribbon.left-bottom:before,.github-fork-ribbon.left-top:after,.github-fork-ribbon.left-top:before{right:auto;left:-3.23em}.github-fork-ribbon.left-bottom:after,.github-fork-ribbon.left-bottom:before,.github-fork-ribbon.right-bottom:after,.github-fork-ribbon.right-bottom:before{top:auto;bottom:3.23em}.github-fork-ribbon.left-top:after,.github-fork-ribbon.left-top:before,.github-fork-ribbon.right-bottom:after,.github-fork-ribbon.right-bottom:before{-webkit-transform:rotate(-45deg);-moz-transform:rotate(-45deg);-ms-transform:rotate(-45deg);-o-transform:rotate(-45deg);transform:rotate(-45deg)}
-       /*# sourceMappingURL=gh-fork-ribbon.min.css.map */
+       */
+      .github-fork-ribbon{width:12.1em;height:12.1em;position:fixed;overflow:hidden;top:0;right:0;z-index:9999;pointer-events:none;font-size:13px;text-decoration:none;text-indent:-999999px}.github-fork-ribbon:active,.github-fork-ribbon:hover{background-color:rgba(0,0,0,0)}.github-fork-ribbon:after,.github-fork-ribbon:before{position:absolute;display:block;width:15.38em;height:1.54em;top:3.23em;right:-3.23em;-webkit-box-sizing:content-box;-moz-box-sizing:content-box;box-sizing:content-box;-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);-o-transform:rotate(45deg);transform:rotate(45deg)}.github-fork-ribbon:before{content:"";padding:.38em 0;background-color:#a00;background-image:-webkit-gradient(linear,left top,left bottom,from(rgba(0,0,0,0)),to(rgba(0,0,0,.15)));background-image:linear-gradient(to bottom,rgba(0,0,0,0),rgba(0,0,0,.15));-webkit-box-shadow:0 .15em .23em 0 rgba(0,0,0,.5);-moz-box-shadow:0 .15em .23em 0 rgba(0,0,0,.5);box-shadow:0 .15em .23em 0 rgba(0,0,0,.5);pointer-events:auto}.github-fork-ribbon:after{content:attr(data-ribbon);color:#fff;font:700 1em "Helvetica Neue",Helvetica,Arial,sans-serif;line-height:1.54em;text-decoration:none;text-shadow:0 -.08em rgba(0,0,0,.5);text-align:center;text-indent:0;padding:.15em 0;margin:.15em 0;border-width:.08em 0;border-style:dotted;border-color:#fff;border-color:rgba(255,255,255,.7)}
     </style>
   </head>
 
-  <body class="">
-    <a class="github-fork-ribbon" href="https://github.com/josherich/gradient-reader" data-ribbon="Fork me on GitHub" title="Fork me on GitHub">Fork me on GitHub</a>
+  <body>
+    <a class="github-fork-ribbon"
+       href="https://github.com/josherich/gradient-reader"
+       data-ribbon="Fork me on GitHub"
+       title="Fork me on GitHub">Fork me on GitHub</a>
 
-    <h2>Gradient Reader</h2>
+    <!-- Page header -->
+    <header class="page-header">
+      <h1>Gradient Reader</h1>
+      <p>Rare and uncommon words are highlighted — the darker the shade, the less frequent the word.</p>
+    </header>
 
-    <div class="configs">
+    <div class="container">
 
-      <div class="config-lang">
-        <label for="lang">Examples:</label>
-        <select name="lang" id="lang">
-          <option value="en">English demo</option>
-          <option value="cn">Chinese demo</option>
-        </select>
+      <!-- Controls bar -->
+      <div class="configs">
+        <div class="config-item">
+          <label for="lang">Example:</label>
+          <select name="lang" id="lang">
+            <option value="en">English demo</option>
+            <option value="cn">Chinese demo</option>
+          </select>
+        </div>
+
+        <div class="config-item">
+          <input type="checkbox" id="use_lm" name="use_lm">
+          <label for="use_lm">Language Model</label>
+        </div>
+
+        <div class="config-item">
+          <label for="gray_range">Intensity:</label>
+          <input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
+        </div>
+
+        <div class="legend">
+          <span>common</span>
+          <div class="legend-bar" id="legend-bar"></div>
+          <span>rare</span>
+        </div>
       </div>
 
-      <div class="config-lm">
-        <input type="checkbox" id="use_lm" name="use_lm">
-        <label for="use_lm">Use Language Model</label>
+      <!-- URL loader -->
+      <div class="url-input">
+        <input type="text" id="url" value="https://observer.com/2025/03/billionaire-private-space-station/" placeholder="Paste a URL to load an article…">
+        <button id="load">Load</button>
       </div>
 
-      <div class="config-alpha">
-        <label for="gray_range">Alpha: </label><input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
+      <!-- Text input -->
+      <textarea id="input_text" rows="8" placeholder="Paste or type text here…"></textarea>
+
+      <!-- Reading area -->
+      <div class="main">
+        <div class="toggles">
+          <!-- word-toggle template (hidden; cloned by JS when needed) -->
+          <div class="word-toggle" aria-hidden="true">
+            <input type="checkbox">
+            <label></label>
+          </div>
+        </div>
+        <div id="output_text"></div>
+        <div id="index">
+          <h5>Rare Words</h5>
+          <ul></ul>
+        </div>
       </div>
 
-    </div>
-
-    <div class="url-input">
-      <input type="text" id="url" value="https://observer.com/2025/03/billionaire-private-space-station/"><button id="load">load</button>
-    </div>
-
-    <textarea name="" id="input_text" cols="30" rows="10"></textarea>
-    <div class="main">
-      <div class="toggles"></div>
-      <div id="output_text"></div>
-      <div id="index">
-        <h5>Index: </h6>
-        <ul></ul>
-      </div>
-    </div>
-
+    </div><!-- /.container -->
 
     <script type="text/javascript" src="./index.js?hash=sdfsdf"></script>
-
+    <script>
+      // Build the legend gradient bar from the gradient colour used for words
+      (function () {
+        var bar = document.getElementById('legend-bar');
+        if (!bar) return;
+        var steps = 8;
+        for (var i = 0; i < steps; i++) {
+          var s = document.createElement('span');
+          var opacity = (i / (steps - 1)) * 0.62;
+          s.style.background = 'rgba(180, 90, 0, ' + opacity.toFixed(2) + ')';
+          bar.appendChild(s);
+        }
+      })();
+    </script>
   </body>
 </html>
