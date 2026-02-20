@@ -1,4 +1,6 @@
 // ── Trie (ported from index.js) ────────────────────────────────────────────
+const CN_MAX_WORD_LEN = 10;
+
 class TrieNode {
   constructor() {
     this.c = {};
@@ -49,9 +51,36 @@ class Trie {
   }
 }
 
+// ── Language detection (ported from index.js) ──────────────────────────────
+function _is_chinese_char(char) {
+  const cp = char.codePointAt(0);
+  return (
+    (cp >= 0x4E00 && cp <= 0x9FFF)  ||
+    (cp >= 0x3400 && cp <= 0x4DBF)  ||
+    (cp >= 0x20000 && cp <= 0x2A6DF) ||
+    (cp >= 0x2A700 && cp <= 0x2B73F) ||
+    (cp >= 0x2B740 && cp <= 0x2B81F) ||
+    (cp >= 0x2B820 && cp <= 0x2CEAF) ||
+    (cp >= 0xF900 && cp <= 0xFAFF)  ||
+    (cp >= 0x2F800 && cp <= 0x2FA1F)
+  );
+}
+
+function _is_chinese_text(text) {
+  if (!text.length) return false;
+  const len = text.length;
+  const sampleN = Math.max(1, Math.floor(len / 10));
+  let hits = 0;
+  for (let i = 0; i < sampleN; i++) {
+    const pick = Math.floor(Math.random() * len);
+    if (_is_chinese_char(text[pick])) hits++;
+  }
+  return (hits / sampleN) > 0.5;
+}
+
 // ── Word-frequency analysis (ported from index.js) ─────────────────────────
 
-// Returns [[start, end, token, freq], ...]
+// English: returns [[start, end, token, freq], ...]
 function getDensityEN(text, wmap) {
   const density = [];
   for (let i = 0; i < text.length;) {
@@ -77,11 +106,55 @@ function getDensityEN(text, wmap) {
   return density;
 }
 
+// Chinese: returns [[start, end, word, log2freq], ...]
+function getDensityCN(text, fmap) {
+  let parent = fmap.root;
+  const density = [];
+
+  for (let i = 0; i < text.length; i++) {
+    let found = false;
+    let skip = 0;
+    let sWord = '';
+    let longest = [];
+
+    for (let j = i; j < text.length; j++) {
+      if (!parent.c[text[j]]) {
+        found = false;
+        skip = j - i;
+        parent = fmap.root;
+        if (longest.length > 0) density.push(longest);
+        break;
+      }
+
+      sWord = sWord + text[j];
+      if (parent.c[text[j]].e) {
+        found = true;
+        longest = [i, j, sWord, Math.log2(parseInt(parent.c[text[j]].f))];
+        skip = j - i;
+        if (skip + 1 >= CN_MAX_WORD_LEN) {
+          break;
+        } else {
+          parent = parent.c[text[j]];
+          continue;
+        }
+      }
+      parent = parent.c[text[j]];
+    }
+
+    if (skip >= 1) i += skip - 1;
+    if (!found) continue;
+  }
+
+  return density;
+}
+
 // Returns { word: [[start, end, freq], ...], ... } for rare words
-function getIndexing(density) {
+// Threshold differs: 12 for Chinese, 15 for English
+function getIndexing(density, isCN) {
+  const thred = isCN ? 12 : 15;
   const indexing = {};
   density
-    .filter(e => e[3] < 15 && e[3] !== -1)
+    .filter(e => e[3] < thred && e[3] !== -1)
     .sort((a, b) => a[3] - b[3])
     .forEach(e => {
       if (indexing[e[2]]) {
@@ -123,9 +196,8 @@ function escapeHtml(str) {
 
 // ── Main-content extraction ────────────────────────────────────────────────
 function extractMainContent() {
-  const LIMIT = 15000; // chars
+  const LIMIT = 15000;
 
-  // 1. Prefer semantic / common article containers
   const candidates = [
     'article',
     'main',
@@ -147,18 +219,15 @@ function extractMainContent() {
     }
   }
 
-  // 2. Find the block element with the most text
   const blocks = Array.from(document.querySelectorAll('div, section'));
   let best = null, bestLen = 0;
   for (const el of blocks) {
-    // Skip nav-like containers
     if (/nav|menu|sidebar|footer|header/i.test(el.id + el.className)) continue;
     const t = el.innerText.trim();
     if (t.length > bestLen) { bestLen = t.length; best = el; }
   }
   if (best && bestLen > 300) return best.innerText.trim().slice(0, LIMIT);
 
-  // 3. Fallback: whole body minus chrome
   const clone = document.body.cloneNode(true);
   ['nav', 'header', 'footer', 'script', 'style', 'aside', 'noscript'].forEach(tag => {
     clone.querySelectorAll(tag).forEach(el => el.remove());
@@ -166,32 +235,34 @@ function extractMainContent() {
   return clone.innerText.trim().slice(0, LIMIT);
 }
 
-// ── Trie loading (cached) ──────────────────────────────────────────────────
-let cachedTrie = null;
-let triePromise = null;
+// ── Trie loading (per-language cache) ─────────────────────────────────────
+const trieCache = { en: null, cn: null };
+const triePromises = { en: null, cn: null };
 
-function loadTrie() {
-  if (cachedTrie) return Promise.resolve(cachedTrie);
-  if (triePromise) return triePromise;
-  const url = chrome.runtime.getURL('enwiki-trie.txt');
-  triePromise = fetch(url)
+function loadTrie(lang) {
+  if (trieCache[lang]) return Promise.resolve(trieCache[lang]);
+  if (triePromises[lang]) return triePromises[lang];
+  const file = lang === 'cn' ? 'cn-trie.txt' : 'enwiki-trie.txt';
+  const url = chrome.runtime.getURL(file);
+  triePromises[lang] = fetch(url)
     .then(r => r.text())
     .then(text => {
-      cachedTrie = Trie.deserialize(text);
-      return cachedTrie;
+      trieCache[lang] = Trie.deserialize(text);
+      return trieCache[lang];
     });
-  return triePromise;
+  return triePromises[lang];
 }
 
 // ── Overlay ────────────────────────────────────────────────────────────────
 let overlayEl = null;
 
-function buildOverlayHTML() {
+function buildOverlayHTML(langLabel) {
   return `
 <div id="gr-backdrop">
   <div id="gr-container">
     <div id="gr-header">
       <span id="gr-title">Gradient Reader</span>
+      <span id="gr-lang-badge">${langLabel}</span>
       <span id="gr-subtitle">Rare words highlighted — darker = less frequent</span>
       <button id="gr-close" title="Close (or click backdrop)">&#x2715;</button>
     </div>
@@ -204,32 +275,33 @@ function buildOverlayHTML() {
 }
 
 function showOverlay() {
-  if (overlayEl) return; // already shown
+  if (overlayEl) return;
+
+  const text = extractMainContent();
+  const isCN = _is_chinese_text(text);
+  const lang = isCN ? 'cn' : 'en';
+  const langLabel = isCN ? '中文' : 'EN';
 
   const wrapper = document.createElement('div');
   wrapper.id = 'gr-root';
-  wrapper.innerHTML = buildOverlayHTML();
+  wrapper.innerHTML = buildOverlayHTML(langLabel);
   document.body.appendChild(wrapper);
   overlayEl = wrapper;
 
-  // Close on backdrop click
   wrapper.querySelector('#gr-backdrop').addEventListener('click', e => {
     if (e.target === e.currentTarget) hideOverlay();
   });
   wrapper.querySelector('#gr-close').addEventListener('click', hideOverlay);
 
-  // Extract text then load trie and render
-  const text = extractMainContent();
   const outputEl = wrapper.querySelector('#output_text');
 
-  loadTrie()
-    .then(wmap => {
-      const density = getDensityEN(text, wmap);
+  loadTrie(lang)
+    .then(trie => {
+      const density = isCN ? getDensityCN(text, trie) : getDensityEN(text, trie);
       outputEl.innerHTML = renderContent(text, density, 5);
 
-      // Build rare-words index
       const ul = wrapper.querySelector('#index ul');
-      const indexing = getIndexing(density);
+      const indexing = getIndexing(density, isCN);
       for (const word in indexing) {
         const li = document.createElement('li');
         li.textContent = word;

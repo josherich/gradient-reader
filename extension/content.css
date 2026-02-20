@@ -64,6 +64,18 @@
   flex: 1;
 }
 
+#gr-root #gr-lang-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: #EDF0FF;
+  color: #4A6CF7;
+  border-radius: 5px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
 #gr-root #gr-close {
   all: unset;
   cursor: pointer;

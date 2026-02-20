@@ -19,7 +19,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["enwiki-trie.txt"],
+      "resources": ["enwiki-trie.txt", "cn-trie.txt"],
       "matches": ["<all_urls>"]
     }
   ]
