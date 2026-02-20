@@ -327,7 +327,7 @@ function renderContent(input, density, gray=5) {
     let [start, end, word, val] = density[i]
     let grey = (denom - (val - min)) / denom / gray
     output += input.slice(prev, start)
-    output += `<span class="gray-tag" style="background: rgba(0,0,0,${grey});" data-start="${start}">` + input.slice(start, end+1) + `</span>`
+    output += `<span class="gray-tag" style="background: rgba(180,90,0,${grey});" data-start="${start}">` + input.slice(start, end+1) + `</span>`
     prev = end + 1
   }
   // output += `\n ${min}, ${max}`
