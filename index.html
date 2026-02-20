@@ -442,15 +442,17 @@
       <!-- Text input -->
       <textarea id="input_text" rows="8" placeholder="Paste or type text here…"></textarea>
 
+      <!-- Word toggles (rendered by JS above the reading panel) -->
+      <div class="toggles">
+        <!-- word-toggle template (hidden; cloned by JS when needed) -->
+        <div class="word-toggle" aria-hidden="true">
+          <input type="checkbox">
+          <label></label>
+        </div>
+      </div>
+
       <!-- Reading area -->
       <div class="main">
-        <div class="toggles">
-          <!-- word-toggle template (hidden; cloned by JS when needed) -->
-          <div class="word-toggle" aria-hidden="true">
-            <input type="checkbox">
-            <label></label>
-          </div>
-        </div>
         <div id="output_text"></div>
         <div id="index">
           <h5>Rare Words</h5>
