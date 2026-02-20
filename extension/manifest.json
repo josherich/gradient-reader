@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Gradient Reader",
+  "version": "1.0",
+  "description": "Overlay a gradient reader view on any page — rare and uncommon words highlighted by frequency.",
+  "permissions": ["activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Toggle Gradient Reader"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["enwiki-trie.txt"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
