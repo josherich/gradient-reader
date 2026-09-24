@@ -218,9 +218,9 @@ function preprocessText(text) {
 
 function escapeText(text) {
   return text
+    .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 }
@@ -237,35 +237,17 @@ function unescapeText(unsafe) {
 // [[start, end, token, freq]]
 function getDensityEN(text) {
   let density = []
-  for (let i = 0; i < text.length;) {
-    let char = text[i]
-
-    if (['"', '“', '”', ',', '.'].includes(char)) {
-      i++
-      continue
-    }
-
-    let end = text.slice(i, text.length).search(/[\s?“”,."]/)
-    let skip = end + 1
-
-    if (char.search(/\s/) == -1) {
-      // remove prefix, suffix puncs
-      let token = text.slice(i, end == -1 ? text.length : i+end)
-      let matches = token.match(/[\w-'’]+/)
-      if (!matches) {
-        console.log(`error in matching token, ignored: ${token}, ${i} - ${i+end}`)
-      } else {
-        // add to density
-        let freq = wmap.get(matches[0].toLowerCase()) ?? -1
-        density.push([i, i+end-1, token, parseInt(freq)])
-      }
-
-      // skip to next
-      if (end == -1) break;
-      i += skip
-    } else {
-      i++
-    }
+  // Match a word, then optional contractions (it's / it’s) and hyphenated parts.
+  // The apostrophe variants are normalized before the dictionary lookup.
+  const words = /[a-z0-9_]+(?:['‘’][a-z0-9_]+)*(?:-[a-z0-9_]+)*/gi
+  for (const match of text.matchAll(words)) {
+    const token = match[0]
+    if (/^\d+$/.test(token)) continue
+    const key = token.toLowerCase().replace(/[‘’]/g, "'")
+    const freq = wmap.get(key)
+    // Missing dictionary entries have unknown frequency, not very low frequency.
+    if (freq === undefined) continue
+    density.push([match.index, match.index + token.length - 1, token, freq])
   }
   return density
 }
@@ -328,18 +310,21 @@ function renderContent(input, density, gray=5) {
   let min = 1000, max = -1
   for (let i = 0; i < density.length; i++) {
     let val = density[i][3]
+    if (val === -1) continue
     min = Math.min(val, min)
     max = Math.max(val, max)
   }
-  let denom = max - min
+  let denom = max - min || 1
   let prev = 0
   for (let i = 0; i < density.length; i++) {
     let [start, end, word, val] = density[i]
+    if (val === -1) continue
     let grey = (denom - (val - min)) / denom / gray
-    output += input.slice(prev, start)
-    output += `<span class="gray-tag" style="background: rgba(180,90,0,${grey});" data-start="${start}">` + input.slice(start, end+1) + `</span>`
+    output += escapeText(input.slice(prev, start))
+    output += `<span class="gray-tag" style="background: rgba(180,90,0,${grey});" data-start="${start}">` + escapeText(input.slice(start, end+1)) + `</span>`
     prev = end + 1
   }
+  output += escapeText(input.slice(prev))
   // output += `\n ${min}, ${max}`
   return output
 }
@@ -502,7 +487,7 @@ document.querySelector('#input_text').addEventListener('keyup', function(e) {
   text = e.target.value
   let temp = document.createElement('div')
   temp.innerHTML = preprocessText(text)
-  text = escapeText(temp.textContent)
+  text = temp.textContent
 
   loadFreq(text).then(_ => {
     renderMain(text)
@@ -550,7 +535,7 @@ document.querySelector('#load').addEventListener('click', function(e) {
       document.querySelector('#input_text').value = text
       let temp = document.createElement('div')
       temp.innerHTML = preprocessText(text)
-      text = escapeText(temp.textContent)
+      text = temp.textContent
 
       renderMain(text)
     })

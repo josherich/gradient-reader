@@ -115,25 +115,17 @@ function _is_chinese_text(text) {
 // English: returns [[start, end, token, freq], ...]
 function getDensityEN(text, wmap) {
   const density = [];
-  for (let i = 0; i < text.length;) {
-    const char = text[i];
-    if (['\u201c', '\u201d', '"', ',', '.'].includes(char)) { i++; continue; }
-
-    const end = text.slice(i).search(/[\s?"",."\u201c\u201d]/);
-    const skip = end + 1;
-
-    if (char.search(/\s/) === -1) {
-      const token = text.slice(i, end === -1 ? text.length : i + end);
-      const matches = token.match(/[\w\-\u2018\u2019']+/);
-      if (matches) {
-        const freq = wmap.get(matches[0].toLowerCase()) ?? -1;
-        density.push([i, i + end - 1, token, parseInt(freq)]);
-      }
-      if (end === -1) break;
-      i += skip;
-    } else {
-      i++;
-    }
+  // Match a word, then optional contractions (it's / it’s) and hyphenated parts.
+  // The apostrophe variants are normalized before the dictionary lookup.
+  const words = /[a-z0-9_]+(?:['‘’][a-z0-9_]+)*(?:-[a-z0-9_]+)*/gi;
+  for (const match of text.matchAll(words)) {
+    const token = match[0];
+    if (/^\d+$/.test(token)) continue;
+    const key = token.toLowerCase().replace(/[‘’]/g, "'");
+    const freq = wmap.get(key);
+    // Missing dictionary entries have unknown frequency, not very low frequency.
+    if (freq === undefined) continue;
+    density.push([match.index, match.index + token.length - 1, token, freq]);
   }
   return density;
 }
@@ -211,6 +203,7 @@ function renderContent(input, density, gray = 5) {
   let output = '';
   let prev = 0;
   for (const [start, end, , val] of density) {
+    if (val === -1) continue;
     const grey = (denom - (val - min)) / denom / gray;
     output += escapeHtml(input.slice(prev, start));
     output += `<span class="gray-tag" style="background:rgba(180,90,0,${grey.toFixed(3)});" data-start="${start}">${escapeHtml(input.slice(start, end + 1))}</span>`;
