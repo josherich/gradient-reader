@@ -156,18 +156,6 @@ async function loadPage(url) {
   return await response.json()
 }
 
-async function loadLMDensity(text, isCN=false) {
-  const response = await fetch(`https://tinysaas.mindynode.com/api/attention`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({text: text, is_cn: isCN})
-  })
-  const res = await response.json()
-  return res.map(({ weight, words, positions }) => positions.map(([start, end]) => [start, end, words, weight])).flat()
-}
-
 function _is_chinese_char(char) {
   let cp = char.codePointAt()
   if ((cp >= 0x4E00 && cp <= 0x9FFF) ||
@@ -201,13 +189,8 @@ function _is_chinese_text(text) {
   return (ratio / sampleN) > 0.5
 }
 
-async function getDensity(text, useLM=false) {
-  const isCN = _is_chinese_text(text);
-  if (useLM) {
-    return await loadLMDensity(text, isCN)
-  } else {
-    return _is_chinese_text(text) ? getDensityCN(text) : getDensityEN(text);
-  }
+function getDensity(text) {
+  return _is_chinese_text(text) ? getDensityCN(text) : getDensityEN(text)
 }
 
 function preprocessText(text) {
@@ -344,7 +327,6 @@ function renderContent(input, density, gray=5) {
 // =============== main ===============
 let lang = 'en'
 let activeDemo = lang
-let use_lm = false;
 let demo = {
   en: `Against Interpretation
 
@@ -491,6 +473,19 @@ const analysisIntensity = { sentence: 65, semantic: 65 }
 let renderVersion = 0
 const output = document.querySelector('#output_text')
 const status = document.querySelector('#analysis-status')
+const isGitHubPages = location.hostname.endsWith('.github.io')
+if (isGitHubPages) document.querySelector('.url-input').hidden = true
+
+async function bundledDemoResults(body) {
+  if (!body.demoId || !window.JEV_DEMO_CACHE) return null
+  const criteria = body.mode === 'semantic'
+    ? body.choices.map(choice => [choice.name.trim(), choice.description.trim()])
+    : null
+  const input = JSON.stringify([1, 'typesafe/jev-1.13', body.demoId, body.mode, body.text, criteria])
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+  const key = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+  return window.JEV_DEMO_CACHE[key]?.results || null
+}
 
 function setStatus(message, error = false) {
   status.textContent = message
@@ -572,7 +567,7 @@ async function renderCurrent(version) {
   try {
     if (currentMode === 'word') {
       await loadFreq(currentText)
-      const entries = await getDensity(currentText, use_lm)
+      const entries = getDensity(currentText)
       if (version !== renderVersion) return
       density = entries
       output.innerHTML = renderContent(currentText, density, gray)
@@ -582,14 +577,22 @@ async function renderCurrent(version) {
       const isDefaultSemanticChoices = choices.length === defaultChoices.length &&
         choices.every((choice, i) => choice.name === defaultChoices[i][0] && choice.description === defaultChoices[i][1])
       const demoId = activeDemo && (currentMode === 'sentence' || isDefaultSemanticChoices) ? activeDemo : undefined
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: currentText, mode: currentMode, demoId,
-          choices: currentMode === 'semantic' ? choices.map(({ name, description }) => ({ name, description })) : undefined })
-      })
-      const data = await response.json().catch(() => ({ error: 'Jev modes require the local Node server. Run npm start.' }))
-      if (!response.ok) throw new Error(data.error || `Analysis failed (${response.status})`)
+      const body = { text: currentText, mode: currentMode, demoId,
+        choices: currentMode === 'semantic' ? choices.map(({ name, description }) => ({ name, description })) : undefined }
+      let data
+      if (isGitHubPages) {
+        const results = await bundledDemoResults(body)
+        if (!results) throw new Error('Jev results on GitHub Pages are available for the built-in demos with default roles. Run npm start to analyze custom text or roles.')
+        data = { results, cached: true }
+      } else {
+        const response = await fetch('./api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+        data = await response.json().catch(() => ({ error: 'Jev modes require the local Node server. Run npm start.' }))
+        if (!response.ok) throw new Error(data.error || `Analysis failed (${response.status})`)
+      }
       if (version !== renderVersion) return
       sentenceResults = data.results
       if (currentMode === 'semantic') {
@@ -771,11 +774,6 @@ document.querySelector('#highlight_color').addEventListener('input', function(e)
   highlightRgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',')
   updateLegend()
   if (mode === 'word') output.innerHTML = renderContent(text, density, gray)
-})
-
-document.querySelector('#use_lm').addEventListener('change', function(e) {
-  use_lm = e.target.checked
-  if (mode === 'word') scheduleRender()
 })
 
 function startLoading() {

@@ -109,7 +109,7 @@
         padding: 14px;
         box-shadow: var(--shadow);
       }
-      .mode-panel[hidden], .word-options[hidden], .analysis-options[hidden], #index[hidden] { display: none; }
+      .mode-panel[hidden], .word-options[hidden], .analysis-options[hidden], .url-input[hidden], #index[hidden] { display: none; }
       .mode-panel h2 { font-size: 14px; margin: 0 0 4px; }
       .mode-panel p { color: var(--text-muted); font-size: 12px; margin: 0 0 8px; line-height: 1.4; }
       #semantic-panel { position: sticky; top: 16px; align-self: flex-start; flex: 0 0 300px; max-height: calc(100vh - 32px); overflow-y: auto; }
@@ -489,11 +489,6 @@
         </div>
 
         <div class="config-item word-options">
-          <input type="checkbox" id="use_lm" name="use_lm">
-          <label for="use_lm">Language Model</label>
-        </div>
-
-        <div class="config-item word-options">
           <label for="gray_range">Intensity:</label>
           <input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
         </div>
@@ -557,6 +552,7 @@
 
     </div><!-- /.container -->
 
-    <script type="text/javascript" src="./index.js?hash=sdfsdf"></script>
+    <script src="./jev-demo-cache.js"></script>
+    <script type="text/javascript" src="./index.js"></script>
   </body>
 </html>

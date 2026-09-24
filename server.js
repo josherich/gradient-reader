@@ -3,12 +3,14 @@ const fs = require('node:fs')
 const files = require('node:fs/promises')
 const path = require('node:path')
 const crypto = require('node:crypto')
+const bundledDemoCache = require('./jev-demo-cache')
 
 const ROOT = __dirname
 const STATIC_FILES = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/index.js': ['index.js', 'text/javascript; charset=utf-8'],
+  '/jev-demo-cache.js': ['jev-demo-cache.js', 'text/javascript; charset=utf-8'],
   '/enwiki-freq.bin.gz': ['enwiki-freq.bin.gz', 'application/gzip'],
   '/cn-freq.bin.gz': ['cn-freq.bin.gz', 'application/gzip'],
   '/gradient-reader.png': ['gradient-reader.png', 'image/png'],
@@ -195,6 +197,10 @@ function createServer({ apiKey = process.env.OPENROUTER_API_KEY, clientFactory,
         if (key) {
           const cached = await readDemoCache(cacheDir, key, body, sentences)
           if (cached) return json(res, 200, { results: cached, cached: true })
+          const bundled = bundledDemoCache[key]
+          if (validCachedResults(bundled, body, sentences)) {
+            return json(res, 200, { results: bundled.results, cached: true })
+          }
         }
         let work = key && pending.get(key)
         if (!work) {

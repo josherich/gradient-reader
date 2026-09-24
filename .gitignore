@@ -57,7 +57,7 @@ typings/
 # dotenv environment variables file
 .env
 
-# Persisted Jev results for the built-in demos
+# Runtime Jev cache (bundled demo results live in jev-demo-cache.js)
 .cache/
 
 # next.js build output

@@ -4,6 +4,7 @@ const { Readable, Writable } = require('node:stream')
 const files = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
+const vm = require('node:vm')
 const { createServer, splitSentences } = require('./server')
 
 async function withServer(create, run, apiKey = 'test-key') {
@@ -79,10 +80,40 @@ test('server serves the app and reports missing API configuration', async () => 
   await withServer(() => { throw new Error('Should not call Jev') }, async server => {
     assert.equal((await request(server, '/')).status, 200)
     assert.equal((await request(server, '/index.js')).status, 200)
+    assert.equal((await request(server, '/jev-demo-cache.js')).status, 200)
     assert.equal((await request(server, '/unknown')).status, 404)
     const response = await request(server, '/api/analyze', 'POST', { mode: 'sentence', text: 'A sentence.' })
     assert.equal(response.status, 503)
   }, '')
+})
+
+test('bundled Jev results match both current demos and work without an API key', async () => {
+  const source = await files.readFile(path.join(__dirname, 'index.js'), 'utf8')
+  const english = source.match(/en: `([\s\S]*?)`,\ncn:/)?.[1]
+  const chinese = source.match(/cn: `([\s\S]*?)`\n}/)?.[1]
+  const choiceSource = source.match(/const defaultChoices = \[([\s\S]*?)\n\]/)?.[1]
+  assert.ok(english && chinese && choiceSource)
+  const demos = { en: vm.runInNewContext('`' + english + '`'), cn: vm.runInNewContext('`' + chinese + '`') }
+  const choices = vm.runInNewContext('[' + choiceSource + ']').map(([name, description]) => ({ name, description }))
+  const cacheDir = await files.mkdtemp(path.join(os.tmpdir(), 'gradient-jev-empty-'))
+  try {
+    const server = createServer({ apiKey: '', cacheDir, clientFactory: () => { throw new Error('Should use bundled results') } })
+    for (const [demoId, text] of Object.entries(demos)) {
+      for (const mode of ['sentence', 'semantic']) {
+        const response = await request(server, '/api/analyze', 'POST', { demoId, mode, text, choices })
+        assert.equal(response.status, 200, `${demoId} ${mode}: ${response.text}`)
+        assert.equal(response.json().cached, true)
+        const sentences = splitSentences(text)
+        assert.deepEqual(response.json().results.map(({ start, end }) => ({ start, end })),
+          sentences.map(({ start, end }) => ({ start, end })))
+      }
+    }
+    assert.equal((await request(server, '/api/analyze', 'POST', {
+      demoId: 'en', mode: 'sentence', text: demos.en + ' edited'
+    })).status, 503)
+  } finally {
+    await files.rm(cacheDir, { recursive: true, force: true })
+  }
 })
 
 test('English and Chinese demo results persist and are keyed by mode, text, and choices', async () => {
