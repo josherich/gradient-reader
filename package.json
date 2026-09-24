@@ -1,0 +1,14 @@
+{
+  "name": "gradient-reader",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@openrouter/sdk": "^1.3.25"
+  }
+}

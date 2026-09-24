@@ -57,5 +57,8 @@ typings/
 # dotenv environment variables file
 .env
 
+# Persisted Jev results for the built-in demos
+.cache/
+
 # next.js build output
 .next

@@ -343,6 +343,7 @@ function renderContent(input, density, gray=5) {
 
 // =============== main ===============
 let lang = 'en'
+let activeDemo = lang
 let use_lm = false;
 let demo = {
   en: `Against Interpretation
@@ -468,15 +469,37 @@ function renderToggles(pairs) {
   }
 }
 
-let renderMain = debounce(async function(text) {
-  startLoading()
+const defaultChoices = [
+  ['Hook', 'Gets the reader in the door: a surprising fact, question, or scene.', '#e63946'],
+  ['Claim / topic sentence', 'States the point of the paragraph.', '#f77f00'],
+  ['Thesis / nut graf', 'States the claim of the whole article and why it matters.', '#d4a000'],
+  ['Support', 'Evidence, data, or quotes that prove a claim.', '#2a9d8f'],
+  ['Example', 'Makes an abstract claim concrete.', '#52b788'],
+  ['Elaboration', 'Unpacks or restates a claim in different words.', '#4d96ff'],
+  ['Definition', 'Pins down the meaning of a term.', '#4361ee'],
+  ['Analogy', 'Explains through a familiar comparison.', '#9b5de5'],
+  ['Pivot', 'Turns the direction of the argument.', '#d65db1'],
+  ['Transition / bridge', 'Connects one idea to the next.', '#8d99ae'],
+  ['So-what / conclusion', 'Explains what the argument means or concludes.', '#a44a3f'],
+  ['Others', 'Any other rhetorical role.', '#6c757d']
+]
+let choices = defaultChoices.map(([name, description, color]) => ({ name, description, color, enabled: true }))
+let mode = 'word'
+let sentenceResults = []
+let semanticPresence = null
+const analysisIntensity = { sentence: 65, semantic: 65 }
+let renderVersion = 0
+const output = document.querySelector('#output_text')
+const status = document.querySelector('#analysis-status')
 
-  density = await getDensity(text, use_lm)
+function setStatus(message, error = false) {
+  status.textContent = message
+  status.classList.toggle('error', error)
+}
 
-  document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
-
+function renderWordIndex(source, entries) {
   document.querySelector('#index ul').innerHTML = ""
-  const indexing = getIndexing(text, density)
+  const indexing = getIndexing(source, entries)
   for (let k in indexing) {
     let el = document.createElement('li')
     let occ = indexing[k]
@@ -486,6 +509,7 @@ let renderMain = debounce(async function(text) {
       let occEl = document.createElement('span')
       occEl.addEventListener('click', (e) => {
         let targ = document.querySelector(`.gray-tag[data-start="${occ[i][0]}"]`)
+        if (!targ) return
         targ.classList.add('highlight')
         setTimeout(e => {
           targ.classList.remove('highlight')
@@ -497,60 +521,267 @@ let renderMain = debounce(async function(text) {
     }
     document.querySelector('#index ul').appendChild(el)
   }
+}
 
-  endLoading()
+function renderSentenceHighlights() {
+  let html = ''
+  let last = 0
+  const scores = mode === 'sentence'
+    ? sentenceResults.map(item => Math.max(0, Math.min(4, Number(item.score)))).filter(Number.isFinite)
+    : []
+  const highlightedScores = scores.filter(score => score >= 1.5)
+  const minScore = Math.min(...highlightedScores)
+  const scoreSpread = Math.max(...highlightedScores) - minScore
+  for (const item of sentenceResults) {
+    if (item.start < last || item.end > text.length || item.end <= item.start) continue
+    html += escapeText(text.slice(last, item.start))
+    const sentence = escapeText(text.slice(item.start, item.end))
+    const baseline = analysisIntensity[mode] / 100
+    if (mode === 'sentence') {
+      const score = Math.max(0, Math.min(4, Number(item.score)))
+      const relativeScore = scoreSpread > 0.001 ? (score - minScore) / scoreSpread : (score - 1.5) / 2.5
+      const alpha = score < 1.5 ? 0 : baseline * (0.12 + 0.88 * Math.pow(relativeScore, 1.6))
+      const label = defaultImportance[Math.round(score)]
+      html += `<span class="sentence-tag" style="background:rgba(180,90,0,${alpha.toFixed(3)})" title="${escapeText(label)} (${score.toFixed(2)})">${sentence}</span>`
+    } else {
+      const choice = choices.find(c => c.name.trim() === item.choice)
+      if (choice && choice.enabled) {
+        const probability = Math.max(0, Math.min(1, Number(item.probability)))
+        const alpha = Math.round(baseline * probability * 255).toString(16).padStart(2, '0')
+        html += `<span class="sentence-tag" style="background:${choice.color}${alpha}" title="${escapeText(choice.name)} (${Math.round(probability * 100)}%)">${sentence}</span>`
+      } else html += sentence
+    }
+    last = item.end
+  }
+  output.innerHTML = html + escapeText(text.slice(last))
+}
 
-}, 500)
+const defaultImportance = ['not important', 'somewhat important', 'important', 'very important', 'most important']
 
-document.querySelector('#input_text').value = demo[lang]
-text = demo[lang]
+async function renderCurrent(version) {
+  const currentText = text
+  const currentMode = mode
+  if (!currentText.trim()) {
+    output.textContent = ''
+    sentenceResults = []
+    setStatus('')
+    return
+  }
+  output.classList.add('is-loading')
+  setStatus(currentMode === 'word' ? 'Reading word frequencies…' : 'Analyzing sentences with Jev…')
+  try {
+    if (currentMode === 'word') {
+      await loadFreq(currentText)
+      const entries = await getDensity(currentText, use_lm)
+      if (version !== renderVersion) return
+      density = entries
+      output.innerHTML = renderContent(currentText, density, gray)
+      renderWordIndex(currentText, density)
+      setStatus('')
+    } else {
+      const isDefaultSemanticChoices = choices.length === defaultChoices.length &&
+        choices.every((choice, i) => choice.name === defaultChoices[i][0] && choice.description === defaultChoices[i][1])
+      const demoId = activeDemo && (currentMode === 'sentence' || isDefaultSemanticChoices) ? activeDemo : undefined
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: currentText, mode: currentMode, demoId,
+          choices: currentMode === 'semantic' ? choices.map(({ name, description }) => ({ name, description })) : undefined })
+      })
+      const data = await response.json().catch(() => ({ error: 'Jev modes require the local Node server. Run npm start.' }))
+      if (!response.ok) throw new Error(data.error || `Analysis failed (${response.status})`)
+      if (version !== renderVersion) return
+      sentenceResults = data.results
+      if (currentMode === 'semantic') {
+        semanticPresence = new Set(sentenceResults.map(item => item.choice))
+        syncChoiceAvailability()
+      }
+      renderSentenceHighlights()
+      setStatus(`${sentenceResults.length} sentences analyzed with Jev${data.cached ? ' (cached)' : ''}.`)
+    }
+  } catch (error) {
+    if (version !== renderVersion) return
+    output.textContent = currentText
+    setStatus(error.message, true)
+  } finally {
+    if (version === renderVersion) output.classList.remove('is-loading')
+  }
+}
 
-loadFreq(text).then(_ => {
-  renderMain(demo[lang])
+const debouncedRender = debounce(version => renderCurrent(version), 650)
+function scheduleRender() {
+  renderVersion++
+  const version = renderVersion
+  debouncedRender(version)
+}
+
+function updateMode() {
+  mode = document.querySelector('#mode').value
+  sentenceResults = []
+  if (mode === 'semantic') {
+    semanticPresence = null
+    syncChoiceAvailability()
+  }
+  output.textContent = text
+  document.querySelectorAll('.word-options').forEach(el => { el.hidden = mode !== 'word' })
+  document.querySelector('.analysis-options').hidden = mode === 'word'
+  if (mode !== 'word') {
+    document.querySelector('#analysis_intensity').value = analysisIntensity[mode]
+    document.querySelector('#analysis_intensity_value').textContent = `${analysisIntensity[mode]}%`
+  }
+  document.querySelector('#semantic-panel').hidden = mode !== 'semantic'
+  document.querySelector('.main').classList.toggle('semantic-layout', mode === 'semantic')
+  document.querySelector('#index').hidden = mode !== 'word'
+  document.querySelector('.page-header p').textContent = mode === 'word'
+    ? 'Rare and uncommon words are highlighted — the darker the shade, the less frequent the word.'
+    : mode === 'sentence'
+      ? 'Important sentences stand out; lower-importance sentences have little or no highlight.'
+      : 'Jev classifies each sentence by its role in the article.'
+  scheduleRender()
+}
+
+function renderChoiceEditor() {
+  const host = document.querySelector('#semantic-choices')
+  host.replaceChildren()
+  choices.forEach((choice, index) => {
+    const row = document.createElement('div')
+    row.className = 'semantic-row'
+    const enabled = document.createElement('input')
+    enabled.type = 'checkbox'
+    enabled.checked = choice.enabled
+    enabled.setAttribute('aria-label', `Show ${choice.name} highlights`)
+    enabled.addEventListener('change', () => { choice.enabled = enabled.checked; if (mode === 'semantic' && sentenceResults.length) renderSentenceHighlights() })
+    const color = document.createElement('input')
+    color.type = 'color'
+    color.value = choice.color
+    color.setAttribute('aria-label', `${choice.name} highlight color`)
+    color.addEventListener('input', () => { choice.color = color.value; if (mode === 'semantic' && sentenceResults.length) renderSentenceHighlights() })
+    const name = document.createElement('input')
+    name.type = 'text'
+    name.value = choice.name
+    name.maxLength = 80
+    name.placeholder = 'Role name'
+    name.setAttribute('aria-label', `Role ${index + 1} name`)
+    name.addEventListener('input', () => { choice.name = name.value; semanticPresence = null; syncChoiceAvailability(); scheduleRender() })
+    const description = document.createElement('input')
+    description.type = 'text'
+    description.className = 'choice-description'
+    description.value = choice.description
+    description.maxLength = 300
+    description.placeholder = 'What this role means'
+    description.setAttribute('aria-label', `${choice.name} description`)
+    description.id = `semantic-description-${index}`
+    description.hidden = !choice.expanded
+    description.addEventListener('input', () => { choice.description = description.value; scheduleRender() })
+    const expand = document.createElement('button')
+    expand.type = 'button'
+    expand.textContent = choice.expanded ? '▾' : '▸'
+    expand.title = `${choice.expanded ? 'Hide' : 'Show'} ${choice.name} description`
+    expand.setAttribute('aria-label', expand.title)
+    expand.setAttribute('aria-controls', description.id)
+    expand.setAttribute('aria-expanded', String(Boolean(choice.expanded)))
+    expand.addEventListener('click', () => {
+      choice.expanded = !choice.expanded
+      description.hidden = !choice.expanded
+      expand.textContent = choice.expanded ? '▾' : '▸'
+      expand.title = `${choice.expanded ? 'Hide' : 'Show'} ${choice.name} description`
+      expand.setAttribute('aria-label', expand.title)
+      expand.setAttribute('aria-expanded', String(choice.expanded))
+    })
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.textContent = '×'
+    remove.title = `Remove ${choice.name}`
+    remove.setAttribute('aria-label', remove.title)
+    remove.disabled = choices.length <= 2
+    remove.addEventListener('click', () => { choices.splice(index, 1); semanticPresence = null; renderChoiceEditor(); scheduleRender() })
+    row.append(enabled, color, name, expand, remove, description)
+    host.append(row)
+  })
+  document.querySelector('#add-choice').disabled = choices.length >= 12
+  syncChoiceAvailability()
+}
+
+function syncChoiceAvailability() {
+  document.querySelectorAll('#semantic-choices .semantic-row').forEach((row, index) => {
+    const choice = choices[index]
+    const present = semanticPresence === null || semanticPresence.has(choice.name.trim())
+    const checkbox = row.querySelector('input[type="checkbox"]')
+    checkbox.checked = present && choice.enabled
+    checkbox.disabled = !present
+    checkbox.title = present ? '' : 'No sentences assigned to this role in the current article'
+    row.classList.toggle('role-absent', !present)
+  })
+}
+
+function setAllSemanticRoles(enabled) {
+  choices.forEach(choice => { choice.enabled = enabled })
+  syncChoiceAvailability()
+  if (mode === 'semantic' && sentenceResults.length) renderSentenceHighlights()
+}
+
+document.querySelector('#select-all-roles').addEventListener('click', () => setAllSemanticRoles(true))
+document.querySelector('#unselect-all-roles').addEventListener('click', () => setAllSemanticRoles(false))
+
+document.querySelector('#add-choice').addEventListener('click', () => {
+  if (choices.length >= 12) return
+  choices.push({ name: `New role ${choices.length + 1}`, description: '', color: '#8b5cf6', enabled: true })
+  semanticPresence = null
+  renderChoiceEditor()
+  scheduleRender()
 })
 
-document.querySelector('#input_text').addEventListener('keyup', function(e) {
-  text = e.target.value
-  let temp = document.createElement('div')
-  temp.innerHTML = preprocessText(text)
-  text = temp.textContent
+renderChoiceEditor()
+document.querySelector('#mode').addEventListener('change', updateMode)
+document.querySelector('#analysis_intensity').addEventListener('input', function(e) {
+  if (mode === 'word') return
+  analysisIntensity[mode] = Number(e.target.value)
+  document.querySelector('#analysis_intensity_value').textContent = `${analysisIntensity[mode]}%`
+  if (sentenceResults.length) renderSentenceHighlights()
+})
+document.querySelector('#input_text').value = demo[lang]
+text = demo[lang]
+scheduleRender()
 
-  loadFreq(text).then(_ => {
-    renderMain(text)
-  })
+document.querySelector('#input_text').addEventListener('input', function(e) {
+  text = e.target.value
+  activeDemo = null
+  semanticPresence = null
+  syncChoiceAvailability()
+  scheduleRender()
 })
 
 document.querySelector('#lang').addEventListener('change', function(e) {
   lang = e.target.value
-  document.querySelector('#input_text').value = demo[lang]
+  activeDemo = lang
   text = demo[lang]
-  loadFreq(text).then(_ => {
-    renderMain(text)
-  })
+  semanticPresence = null
+  syncChoiceAvailability()
+  document.querySelector('#input_text').value = text
+  scheduleRender()
 })
 
-document.querySelector('#gray_range').addEventListener('change', function(e) {
+document.querySelector('#gray_range').addEventListener('input', function(e) {
   gray = Number(e.target.value) / 10
-  document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
+  if (mode === 'word') output.innerHTML = renderContent(text, density, gray)
 })
 
 document.querySelector('#highlight_color').addEventListener('input', function(e) {
   const hex = e.target.value
   highlightRgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',')
   updateLegend()
-  document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
+  if (mode === 'word') output.innerHTML = renderContent(text, density, gray)
 })
 
 document.querySelector('#use_lm').addEventListener('change', function(e) {
   use_lm = e.target.checked
-  renderMain(text)
+  if (mode === 'word') scheduleRender()
 })
 
 function startLoading() {
   const btn = document.querySelector('#load')
   btn.textContent = 'Loading...'
   btn.disabled = true
-  setTimeout(endLoading, 10000)
 }
 
 function endLoading() {
@@ -559,19 +790,22 @@ function endLoading() {
   btn.disabled = false
 }
 
-document.querySelector('#load').addEventListener('click', function(e) {
-  let uri = document.querySelector('#url').value
-  loadPage(uri)
-    .then(data => {
-      text = data['content']
-      document.querySelector('#input_text').value = text
-      let temp = document.createElement('div')
-      temp.innerHTML = preprocessText(text)
-      text = temp.textContent
-
-      renderMain(text)
-    })
-    .catch(err => {
-      document.querySelector('#output_text').innerHTML = `<h6>Invalid URL: ${err}</h6>`
-    })
+document.querySelector('#load').addEventListener('click', async function() {
+  try {
+    const uri = document.querySelector('#url').value
+    const data = await loadPage(uri)
+    const raw = data.content
+    const temp = document.createElement('div')
+    temp.innerHTML = preprocessText(raw)
+    text = temp.textContent
+    activeDemo = null
+    semanticPresence = null
+    syncChoiceAvailability()
+    document.querySelector('#input_text').value = text
+    scheduleRender()
+  } catch (error) {
+    setStatus(`Could not load URL: ${error.message}`, true)
+  } finally {
+    endLoading()
+  }
 })

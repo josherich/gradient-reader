@@ -102,6 +102,42 @@
         cursor: pointer;
       }
 
+      .mode-panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        box-shadow: var(--shadow);
+      }
+      .mode-panel[hidden], .word-options[hidden], .analysis-options[hidden], #index[hidden] { display: none; }
+      .mode-panel h2 { font-size: 14px; margin: 0 0 4px; }
+      .mode-panel p { color: var(--text-muted); font-size: 12px; margin: 0 0 8px; line-height: 1.4; }
+      #semantic-panel { position: sticky; top: 16px; align-self: flex-start; flex: 0 0 300px; max-height: calc(100vh - 32px); overflow-y: auto; }
+      .semantic-row { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr) 27px 27px; gap: 5px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+      .semantic-row input[type="text"] { min-width: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font: inherit; font-size: 12px; }
+      .semantic-row input[type="color"] { width: 26px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
+      .semantic-row .choice-description { grid-column: 1 / -1; }
+      .semantic-row .choice-description[hidden] { display: none; }
+      .semantic-row button, .semantic-actions button, #add-choice { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: var(--radius-sm); cursor: pointer; padding: 4px; }
+      .semantic-row button { height: 27px; line-height: 1; }
+      .semantic-row button[aria-expanded="true"] { color: var(--primary); }
+      .semantic-row.role-absent { opacity: .55; }
+      .semantic-row button:disabled, #add-choice:disabled { opacity: .4; cursor: not-allowed; }
+      .semantic-actions { display: flex; gap: 6px; margin: 0 0 4px; }
+      .semantic-actions button { font-size: 12px; padding: 5px 8px; }
+      #add-choice { margin-top: 10px; font-size: 12px; }
+      #analysis-status { min-height: 20px; color: var(--text-muted); font-size: 12px; margin: 0 0 8px; }
+      #analysis-status.error { color: #b42318; }
+      .sentence-tag { border-radius: 2px; }
+      @media (max-width: 760px) {
+        .main.semantic-layout { flex-direction: column; }
+        .main.semantic-layout #output_text { width: 100%; }
+        #semantic-panel { position: static; order: -1; width: 100%; max-height: 320px; flex-basis: auto; }
+      }
+      @media (max-width: 640px) {
+        #index { display: none; }
+      }
+
       /* ── Form controls ───────────────────────────────────────────── */
       select {
         font-size: 13px;
@@ -241,6 +277,7 @@
       /* ── Output / reading panel ──────────────────────────────────── */
       #output_text {
         flex: 1;
+        min-width: 0;
         min-height: 520px;
         max-height: 700px;
         overflow-y: auto;
@@ -436,6 +473,14 @@
       <!-- Controls bar -->
       <div class="configs">
         <div class="config-item">
+          <label for="mode">Mode:</label>
+          <select id="mode">
+            <option value="word">Word frequency</option>
+            <option value="sentence">Sentence importance</option>
+            <option value="semantic">Semantic role</option>
+          </select>
+        </div>
+        <div class="config-item">
           <label for="lang">Example:</label>
           <select name="lang" id="lang">
             <option value="en">English demo</option>
@@ -443,17 +488,23 @@
           </select>
         </div>
 
-        <div class="config-item">
+        <div class="config-item word-options">
           <input type="checkbox" id="use_lm" name="use_lm">
           <label for="use_lm">Language Model</label>
         </div>
 
-        <div class="config-item">
+        <div class="config-item word-options">
           <label for="gray_range">Intensity:</label>
           <input type="range" min="10" max="70" value="40" class="slider" id="gray_range">
         </div>
 
-        <div class="legend">
+        <div class="config-item analysis-options" hidden>
+          <label for="analysis_intensity">Highlight intensity:</label>
+          <input type="range" min="0" max="100" value="65" id="analysis_intensity">
+          <output id="analysis_intensity_value" for="analysis_intensity">65%</output>
+        </div>
+
+        <div class="legend word-options">
           <span>common</span>
           <div class="legend-bar" id="legend-bar"></div>
           <span>rare</span>
@@ -474,6 +525,7 @@
 
       <!-- Text input -->
       <textarea id="input_text" rows="8" placeholder="Paste or type text here…"></textarea>
+      <p id="analysis-status" role="status" aria-live="polite"></p>
 
       <!-- Word toggles (rendered by JS above the reading panel) -->
       <div class="toggles">
@@ -487,6 +539,16 @@
       <!-- Reading area -->
       <div class="main">
         <div id="output_text"></div>
+        <section id="semantic-panel" class="mode-panel" aria-label="Semantic roles" hidden>
+          <h2>Semantic roles</h2>
+          <p>Roles absent from this article are unchecked. Expand a row to edit its description.</p>
+          <div class="semantic-actions">
+            <button id="select-all-roles" type="button">Select all</button>
+            <button id="unselect-all-roles" type="button">Unselect all</button>
+          </div>
+          <div id="semantic-choices"></div>
+          <button id="add-choice" type="button">Add role</button>
+        </section>
         <div id="index">
           <h5>Rare Words</h5>
           <ul></ul>
