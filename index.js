@@ -38,62 +38,72 @@ class Trie {
     }
     return n.e ? n.f : -1
   }
-  serialize() {
-    const dfs = (node) => {
-        let result = '';
-        for (const [char, child] of Object.entries(node.c)) {
-            result += char + dfs(child);
-        }
-        if (node.e) result += ('*'+node.f); // Mark end of a word
-        return result ? `{${result}}` : ''; // Wrap children in {}
-    };
-    return dfs(this.root);
-  }
-  static deserialize(serialized) {
-    let index = 0;
+}
 
-    function parseNode() {
-        let node = new TrieNode;
-        while (index < serialized.length) {
-            let char = serialized[index++];
+// ---- compact frequency dictionary decoder ----------------------------------
+// Format (gunzipped bytes): varint numWords, varint wordStreamLen, varint freqScale,
+// then front-coded word stream, then varint freq stream. See compress.js.
+function readVarint(buf, pos) {
+  let n = 0, shift = 0, b
+  do {
+    b = buf[pos.i++]
+    n += (b & 0x7f) * Math.pow(2, shift)
+    shift += 7
+  } while (b & 0x80)
+  return n
+}
 
-            if (char === '{') {
-                continue;
-            } else if (char === '}') {
-                break;
-            } else if (char === '*') {
-                let freq = '';
-                while (/[0-9]/.test(serialized[index])) {
-                    freq += serialized[index++];
-                }
-                node.e = true;
-                node.f = parseInt(freq, 10);
-            } else {
-                node.c[char] = parseNode();
-            }
-        }
-        return node;
+function decodeFreqBin(buf) {
+  const pos = { i: 0 }
+  const numWords = readVarint(buf, pos)
+  const wordStreamLen = readVarint(buf, pos)
+  const freqScale = readVarint(buf, pos)
+  const wordsEnd = pos.i + wordStreamLen
+  const words = new Array(numWords)
+  let prev = ''
+  const decoder = new TextDecoder('utf-8')
+  for (let k = 0; k < numWords; k++) {
+    const v = readVarint(buf, pos)
+    let keep, suffixLen
+    if (v === 0) {
+      keep = readVarint(buf, pos)
+      suffixLen = readVarint(buf, pos)
+    } else {
+      keep = v >> 8
+      suffixLen = v & 0xff
     }
-    const trie = new Trie();
-    trie.root = parseNode();
-    return trie;
+    prev = prev.slice(0, keep) + decoder.decode(buf.subarray(pos.i, pos.i + suffixLen))
+    pos.i += suffixLen
+    words[k] = prev
   }
+  const pairs = new Array(numWords)
+  for (let k = 0; k < numWords; k++) {
+    pairs[k] = [words[k], readVarint(buf, pos) / freqScale]
+  }
+  return pairs
+}
+
+async function fetchFreqBin(url) {
+  const response = await fetch(url)
+  const stream = response.body.pipeThrough(new DecompressionStream('gzip'))
+  const buf = new Uint8Array(await new Response(stream).arrayBuffer())
+  return decodeFreqBin(buf)
 }
 
 let fmap = new Trie();
-let wmap = new Trie();
+let wmap = new Map();
 
 async function loadFreq(text) {
   let is_cn = _is_chinese_char(text)
   if ( is_cn && Object.keys(fmap.root.c).length === 0) {
-    const response = await fetch('./cn-trie.txt')
-    const text_1 = await response.text()
-    fmap = Trie.deserialize(text_1)
+    // CN: longest-prefix matching needs a trie; freqs are stored as log2(freq)
+    const pairs = await fetchFreqBin('./cn-freq.bin.gz')
+    const trie = new Trie()
+    for (const [word, logFreq] of pairs) trie.insert(word, logFreq)
+    fmap = trie
   }
-  if (!is_cn && Object.keys(wmap.root.c).length === 0) {
-    const response_1 = await fetch('./enwiki-trie.txt')
-    const text_2 = await response_1.text()
-    wmap = Trie.deserialize(text_2)
+  if (!is_cn && wmap.size === 0) {
+    wmap = new Map(await fetchFreqBin('./enwiki-freq.bin.gz'))
   }
   return Promise.resolve()
 }
@@ -246,7 +256,7 @@ function getDensityEN(text) {
         console.log(`error in matching token, ignored: ${token}, ${i} - ${i+end}`)
       } else {
         // add to density
-        let freq = wmap.search(matches[0].toLowerCase()) || -1
+        let freq = wmap.get(matches[0].toLowerCase()) ?? -1
         density.push([i, i+end-1, token, parseInt(freq)])
       }
 
@@ -287,8 +297,8 @@ function getDensityCN(text) {
       if (parent.c[text[j]].e) {
         console.log('found', sWord, parent.c[text[j]].f)
         found = true
-        // cache the longest match
-        longest = [i, j, sWord, Math.log2(parseInt(parent.c[text[j]].f))]
+        // cache the longest match (freq is already stored as log2(freq))
+        longest = [i, j, sWord, parent.c[text[j]].f]
         skip = j - i
         if (skip + 1 >= maxLen) {
           break

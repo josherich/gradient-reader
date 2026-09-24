@@ -22,33 +22,65 @@ class Trie {
     }
     return n.e ? n.f : -1;
   }
-  static deserialize(serialized) {
-    let index = 0;
-    function parseNode() {
-      const node = new TrieNode();
-      while (index < serialized.length) {
-        const char = serialized[index++];
-        if (char === '{') {
-          continue;
-        } else if (char === '}') {
-          break;
-        } else if (char === '*') {
-          let freq = '';
-          while (/[0-9]/.test(serialized[index])) {
-            freq += serialized[index++];
-          }
-          node.e = true;
-          node.f = parseInt(freq, 10);
-        } else {
-          node.c[char] = parseNode();
-        }
-      }
-      return node;
+  insert(word, freq) {
+    if (!word) return;
+    let n = this.root;
+    for (let i = 0; i < word.length; i++) {
+      const char = word[i];
+      if (!n.c[char]) n.c[char] = new TrieNode();
+      n = n.c[char];
     }
-    const trie = new Trie();
-    trie.root = parseNode();
-    return trie;
+    n.e = true;
+    n.f = freq;
   }
+}
+
+// ── Compact frequency dictionary decoder (see compress.js) ────────────────
+function readVarint(buf, pos) {
+  let n = 0, shift = 0, b;
+  do {
+    b = buf[pos.i++];
+    n += (b & 0x7f) * Math.pow(2, shift);
+    shift += 7;
+  } while (b & 0x80);
+  return n;
+}
+
+function decodeFreqBin(buf) {
+  const pos = { i: 0 };
+  const numWords = readVarint(buf, pos);
+  const wordStreamLen = readVarint(buf, pos);
+  const freqScale = readVarint(buf, pos);
+  const wordsEnd = pos.i + wordStreamLen;
+  const words = new Array(numWords);
+  let prev = '';
+  const decoder = new TextDecoder('utf-8');
+  for (let k = 0; k < numWords; k++) {
+    const v = readVarint(buf, pos);
+    let keep, suffixLen;
+    if (v === 0) {
+      keep = readVarint(buf, pos);
+      suffixLen = readVarint(buf, pos);
+    } else {
+      keep = v >> 8;
+      suffixLen = v & 0xff;
+    }
+    prev = prev.slice(0, keep) + decoder.decode(buf.subarray(pos.i, pos.i + suffixLen));
+    pos.i += suffixLen;
+    words[k] = prev;
+  }
+  const pairs = new Array(numWords);
+  for (let k = 0; k < numWords; k++) {
+    pairs[k] = [words[k], readVarint(buf, pos) / freqScale];
+  }
+  return pairs;
+}
+
+async function fetchFreqBin(url) {
+  const response = await fetch(url);
+  const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+  const buf = new Uint8Array(await new Response(stream).arrayBuffer());
+  return decodeFreqBin(buf);
 }
 
 // ── Language detection (ported from index.js) ──────────────────────────────
@@ -94,7 +126,7 @@ function getDensityEN(text, wmap) {
       const token = text.slice(i, end === -1 ? text.length : i + end);
       const matches = token.match(/[\w\-\u2018\u2019']+/);
       if (matches) {
-        const freq = wmap.search(matches[0].toLowerCase()) || -1;
+        const freq = wmap.get(matches[0].toLowerCase()) ?? -1;
         density.push([i, i + end - 1, token, parseInt(freq)]);
       }
       if (end === -1) break;
@@ -129,7 +161,8 @@ function getDensityCN(text, fmap) {
       sWord = sWord + text[j];
       if (parent.c[text[j]].e) {
         found = true;
-        longest = [i, j, sWord, Math.log2(parseInt(parent.c[text[j]].f))];
+        // freq is already stored as log2(freq)
+        longest = [i, j, sWord, parent.c[text[j]].f];
         skip = j - i;
         if (skip + 1 >= CN_MAX_WORD_LEN) {
           break;
@@ -242,12 +275,18 @@ const triePromises = { en: null, cn: null };
 function loadTrie(lang) {
   if (trieCache[lang]) return Promise.resolve(trieCache[lang]);
   if (triePromises[lang]) return triePromises[lang];
-  const file = lang === 'cn' ? 'cn-trie.txt' : 'enwiki-trie.txt';
+  const file = lang === 'cn' ? 'cn-freq.bin.gz' : 'enwiki-freq.bin.gz';
   const url = chrome.runtime.getURL(file);
-  triePromises[lang] = fetch(url)
-    .then(r => r.text())
-    .then(text => {
-      trieCache[lang] = Trie.deserialize(text);
+  triePromises[lang] = fetchFreqBin(url)
+    .then(pairs => {
+      if (lang === 'cn') {
+        // longest-prefix matching needs a trie; freqs are stored as log2(freq)
+        const trie = new Trie();
+        for (const [word, logFreq] of pairs) trie.insert(word, logFreq);
+        trieCache[lang] = trie;
+      } else {
+        trieCache[lang] = new Map(pairs);
+      }
       return trieCache[lang];
     });
   return triePromises[lang];

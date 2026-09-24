@@ -19,7 +19,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["enwiki-trie.txt", "cn-trie.txt"],
+      "resources": ["enwiki-freq.bin.gz", "cn-freq.bin.gz"],
       "matches": ["<all_urls>"]
     }
   ]
