@@ -321,7 +321,7 @@ function renderContent(input, density, gray=5) {
     let [start, end, word, val] = density[i]
     if (val === -1) continue
     let grey = (denom - (val - min)) / denom / gray
-    let color = `rgba(180,90,0,${grey})`
+    let color = `rgba(${highlightRgb},${grey})`
     let gap = input.slice(prev, start)
     // Blend across short spaces and mid-sentence punctuation, but stop at line breaks.
     if (previousColor && gap.length > 0 && gap.length <= 4 && /^[\t ,;:，、；：]+$/.test(gap)) {
@@ -424,9 +424,23 @@ IAPP/OneTrust 分别于 2019 年 4 月和 8 月进行了两次调查，调查问
 在个人数据保护的全球浪潮中，中国也无法置身事外。中国也在数据保护立法上持续做出努力。早在 2003 年，国务院信息化办公室就已经开始展开个人信息保护法立法研究工作，并于 2005 年形成专家意见稿；2009 年中华人民共和国刑法修正案（七）对窃取、出售或非法提供给他人的行为作出「情节严重的，处三年以下有期徒刑或拘役，并处或单处罚金」的规定，之后 2015 年的刑法修正案（九）又对非法获取公民个人信息的罪名做了补充；2017 年 12 月 29 日，全国信息安全标准化技术委员会正式发布《信息安全技术个人信息安全规范》，从信息权利保护的角度全面规定了公民个人信息的收集、保存、使用、委托处理、共享、转让、公开披露以及个人信息安全的处置等。`
 }
 
-let gray = 6
+let gray = Number(document.querySelector('#gray_range').value) / 10
+let highlightRgb = '180,90,0'
 let density = []
 let text = null
+
+function updateLegend() {
+  const bar = document.querySelector('#legend-bar')
+  if (!bar.children.length) {
+    for (let i = 0; i < 8; i++) bar.appendChild(document.createElement('span'))
+  }
+  Array.from(bar.children).forEach((step, i) => {
+    const opacity = (i / (bar.children.length - 1)) * 0.62
+    step.style.background = `rgba(${highlightRgb},${opacity.toFixed(2)})`
+  })
+}
+
+updateLegend()
 
 function renderToggles(pairs) {
   let toggles = document.querySelector('.toggles')
@@ -516,9 +530,15 @@ document.querySelector('#lang').addEventListener('change', function(e) {
 })
 
 document.querySelector('#gray_range').addEventListener('change', function(e) {
-  let gray = parseFloat(e.target.value/10)
-  let html = renderContent(text, density, gray)
-  document.querySelector('#output_text').innerHTML = html
+  gray = Number(e.target.value) / 10
+  document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
+})
+
+document.querySelector('#highlight_color').addEventListener('input', function(e) {
+  const hex = e.target.value
+  highlightRgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',')
+  updateLegend()
+  document.querySelector('#output_text').innerHTML = renderContent(text, density, gray)
 })
 
 document.querySelector('#use_lm').addEventListener('change', function(e) {

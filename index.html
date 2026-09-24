@@ -382,6 +382,35 @@
         flex: 1;
       }
 
+      .color-picker {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        margin-left: 2px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-muted);
+        background: var(--surface);
+        cursor: pointer;
+      }
+
+      .color-picker:hover { color: var(--text); }
+      .color-picker:focus-within {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+      .color-picker input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+      }
+
       /* ── GitHub ribbon ───────────────────────────────────────────── */
       /*!
        * "Fork me on GitHub" CSS ribbon v0.2.3 | MIT License
@@ -429,6 +458,12 @@
           <span>common</span>
           <div class="legend-bar" id="legend-bar"></div>
           <span>rare</span>
+          <label class="color-picker" title="Choose highlight color">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m14 5 5 5M4 20l4.5-1 11-11a2.12 2.12 0 0 0-3-3l-11 11L4 20Z"/>
+            </svg>
+            <input type="color" id="highlight_color" value="#b45a00" aria-label="Highlight color">
+          </label>
         </div>
       </div>
 
@@ -462,19 +497,5 @@
     </div><!-- /.container -->
 
     <script type="text/javascript" src="./index.js?hash=sdfsdf"></script>
-    <script>
-      // Build the legend gradient bar from the gradient colour used for words
-      (function () {
-        var bar = document.getElementById('legend-bar');
-        if (!bar) return;
-        var steps = 8;
-        for (var i = 0; i < steps; i++) {
-          var s = document.createElement('span');
-          var opacity = (i / (steps - 1)) * 0.62;
-          s.style.background = 'rgba(180, 90, 0, ' + opacity.toFixed(2) + ')';
-          bar.appendChild(s);
-        }
-      })();
-    </script>
   </body>
 </html>
