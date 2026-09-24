@@ -5,6 +5,7 @@
 Highlight interesting words
 
 ## Updates
+- 2026.09.23 update: compact binary frequency dictionaries (front-coded, log2-quantized, gzipped)
 - 2025.03.23 add: render using language model
 - 2020.01.21 fix: should skip quotes
 - 2019.10.18 support: English
