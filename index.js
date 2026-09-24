@@ -316,13 +316,25 @@ function renderContent(input, density, gray=5) {
   }
   let denom = max - min || 1
   let prev = 0
+  let previousColor = null
   for (let i = 0; i < density.length; i++) {
     let [start, end, word, val] = density[i]
     if (val === -1) continue
     let grey = (denom - (val - min)) / denom / gray
-    output += escapeText(input.slice(prev, start))
-    output += `<span class="gray-tag" style="background: rgba(180,90,0,${grey});" data-start="${start}">` + escapeText(input.slice(start, end+1)) + `</span>`
+    let color = `rgba(180,90,0,${grey})`
+    let gap = input.slice(prev, start)
+    // Blend across short spaces and mid-sentence punctuation, but stop at line breaks.
+    if (previousColor && gap.length > 0 && gap.length <= 4 && /^[\t ,;:，、；：]+$/.test(gap)) {
+      output += `<span class="gray-bridge" style="background:linear-gradient(to right,${previousColor},${color});">${escapeText(gap)}</span>`
+    } else {
+      output += escapeText(gap)
+    }
+    let background = previousColor && !gap
+      ? `linear-gradient(to right,${previousColor},${color} 25%)`
+      : color
+    output += `<span class="gray-tag" style="background:${background};" data-start="${start}">` + escapeText(input.slice(start, end+1)) + `</span>`
     prev = end + 1
+    previousColor = color
   }
   output += escapeText(input.slice(prev))
   // output += `\n ${min}, ${max}`

@@ -202,12 +202,24 @@ function renderContent(input, density, gray = 5) {
   const denom = max - min || 1;
   let output = '';
   let prev = 0;
+  let previousColor = null;
   for (const [start, end, , val] of density) {
     if (val === -1) continue;
     const grey = (denom - (val - min)) / denom / gray;
-    output += escapeHtml(input.slice(prev, start));
-    output += `<span class="gray-tag" style="background:rgba(180,90,0,${grey.toFixed(3)});" data-start="${start}">${escapeHtml(input.slice(start, end + 1))}</span>`;
+    const color = `rgba(180,90,0,${grey.toFixed(3)})`;
+    const gap = input.slice(prev, start);
+    // Blend across short spaces and mid-sentence punctuation, but stop at line breaks.
+    if (previousColor && gap.length > 0 && gap.length <= 4 && /^[\t ,;:，、；：]+$/.test(gap)) {
+      output += `<span class="gray-bridge" style="background:linear-gradient(to right,${previousColor},${color});">${escapeHtml(gap)}</span>`;
+    } else {
+      output += escapeHtml(gap);
+    }
+    const background = previousColor && !gap
+      ? `linear-gradient(to right,${previousColor},${color} 25%)`
+      : color;
+    output += `<span class="gray-tag" style="background:${background};" data-start="${start}">${escapeHtml(input.slice(start, end + 1))}</span>`;
     prev = end + 1;
+    previousColor = color;
   }
   output += escapeHtml(input.slice(prev));
   return output;

@@ -123,11 +123,11 @@
   font-family: inherit;
 }
 
-#gr-root #output_text .gray-tag {
+#gr-root #output_text .gray-tag,
+#gr-root #output_text .gray-bridge {
   display: inline;
-  border-radius: 3px;
-  padding: 1px 1px;
-  transition: background 0.35s ease;
+  padding: 0;
+  border-radius: 0;
 }
 
 #gr-root #output_text .highlight {
