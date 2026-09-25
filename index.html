@@ -129,6 +129,12 @@
       #analysis-status { min-height: 20px; color: var(--text-muted); font-size: 12px; margin: 0 0 8px; }
       #analysis-status.error { color: #b42318; }
       .sentence-tag { border-radius: 2px; }
+      .semantic-tag { cursor: pointer; }
+      .semantic-tag:hover, .semantic-tag:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+      #role-menu[hidden] { display: none; }
+      #role-menu { position: fixed; z-index: 10000; width: 230px; max-width: calc(100vw - 16px); padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+      #role-menu label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--text); }
+      #role-menu select { width: 100%; }
       @media (max-width: 760px) {
         .main.semantic-layout { flex-direction: column; }
         .main.semantic-layout #output_text { width: 100%; }
@@ -536,7 +542,7 @@
         <div id="output_text"></div>
         <section id="semantic-panel" class="mode-panel" aria-label="Semantic roles" hidden>
           <h2>Semantic roles</h2>
-          <p>Roles absent from this article are unchecked. Expand a row to edit its description.</p>
+          <p>Click a highlighted sentence to change its role. Roles absent from this article are unchecked. Expand a row to edit its description.</p>
           <div class="semantic-actions">
             <button id="select-all-roles" type="button">Select all</button>
             <button id="unselect-all-roles" type="button">Unselect all</button>
@@ -548,6 +554,11 @@
           <h5>Rare Words</h5>
           <ul></ul>
         </div>
+      </div>
+
+      <div id="role-menu" hidden>
+        <label for="role-select">Sentence role</label>
+        <select id="role-select"></select>
       </div>
 
     </div><!-- /.container -->

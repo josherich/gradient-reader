@@ -473,6 +473,9 @@ const analysisIntensity = { sentence: 65, semantic: 65 }
 let renderVersion = 0
 const output = document.querySelector('#output_text')
 const status = document.querySelector('#analysis-status')
+const roleMenu = document.querySelector('#role-menu')
+const roleSelect = document.querySelector('#role-select')
+let activeRoleIndex = null
 const isGitHubPages = location.hostname.endsWith('.github.io')
 if (isGitHubPages) document.querySelector('.url-input').hidden = true
 
@@ -519,6 +522,7 @@ function renderWordIndex(source, entries) {
 }
 
 function renderSentenceHighlights() {
+  closeRoleMenu()
   let html = ''
   let last = 0
   const scores = mode === 'sentence'
@@ -527,7 +531,7 @@ function renderSentenceHighlights() {
   const highlightedScores = scores.filter(score => score >= 1.5)
   const minScore = Math.min(...highlightedScores)
   const scoreSpread = Math.max(...highlightedScores) - minScore
-  for (const item of sentenceResults) {
+  for (const [index, item] of sentenceResults.entries()) {
     if (item.start < last || item.end > text.length || item.end <= item.start) continue
     html += escapeText(text.slice(last, item.start))
     const sentence = escapeText(text.slice(item.start, item.end))
@@ -541,15 +545,81 @@ function renderSentenceHighlights() {
     } else {
       const choice = choices.find(c => c.name.trim() === item.choice)
       if (choice && choice.enabled) {
-        const probability = Math.max(0, Math.min(1, Number(item.probability)))
+        const probability = item.manuallyAssigned ? 1 : Math.max(0, Math.min(1, Number(item.probability)))
         const alpha = Math.round(baseline * probability * 255).toString(16).padStart(2, '0')
-        html += `<span class="sentence-tag" style="background:${choice.color}${alpha}" title="${escapeText(choice.name)} (${Math.round(probability * 100)}%)">${sentence}</span>`
+        const detail = item.manuallyAssigned ? 'manually assigned' : `${Math.round(probability * 100)}%`
+        html += `<span class="sentence-tag semantic-tag" data-result-index="${index}" role="button" tabindex="0" style="background:${choice.color}${alpha}" title="${escapeText(choice.name)} (${detail}). Click to change role">${sentence}</span>`
       } else html += sentence
     }
     last = item.end
   }
   output.innerHTML = html + escapeText(text.slice(last))
 }
+
+function closeRoleMenu(restoreFocus = false) {
+  const index = activeRoleIndex
+  roleMenu.hidden = true
+  activeRoleIndex = null
+  if (restoreFocus && index !== null) output.querySelector(`.semantic-tag[data-result-index="${index}"]`)?.focus()
+}
+
+function openRoleMenu(tag) {
+  const index = Number(tag.dataset.resultIndex)
+  const item = sentenceResults[index]
+  if (mode !== 'semantic' || !item) return
+  if (activeRoleIndex === index) { closeRoleMenu(); return }
+  roleSelect.replaceChildren()
+  choices.forEach((choice, choiceIndex) => {
+    if (!choice.name.trim()) return
+    const option = new Option(choice.name.trim(), String(choiceIndex))
+    option.selected = choice.name.trim() === item.choice
+    roleSelect.add(option)
+  })
+  activeRoleIndex = index
+  roleMenu.hidden = false
+  const rect = tag.getBoundingClientRect()
+  const menuWidth = roleMenu.offsetWidth
+  const menuHeight = roleMenu.offsetHeight
+  roleMenu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8))}px`
+  const below = rect.bottom + 6
+  const above = rect.top - menuHeight - 6
+  const top = below + menuHeight <= window.innerHeight - 8 ? below : above >= 8 ? above : Math.max(8, window.innerHeight - menuHeight - 8)
+  roleMenu.style.top = `${top}px`
+  roleSelect.focus()
+}
+
+output.addEventListener('click', event => {
+  const tag = event.target.closest('.semantic-tag')
+  if (tag && output.contains(tag)) openRoleMenu(tag)
+})
+output.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  const tag = event.target.closest('.semantic-tag')
+  if (!tag || !output.contains(tag)) return
+  event.preventDefault()
+  openRoleMenu(tag)
+})
+roleSelect.addEventListener('change', () => {
+  if (activeRoleIndex === null) return
+  const index = activeRoleIndex
+  const choice = choices[Number(roleSelect.value)]
+  if (!choice) return
+  sentenceResults[index].choice = choice.name.trim()
+  sentenceResults[index].manuallyAssigned = true
+  choice.enabled = true
+  semanticPresence = new Set(sentenceResults.map(item => item.choice))
+  syncChoiceAvailability()
+  renderSentenceHighlights()
+  output.querySelector(`.semantic-tag[data-result-index="${index}"]`)?.focus()
+})
+document.addEventListener('pointerdown', event => {
+  if (!roleMenu.hidden && !roleMenu.contains(event.target) && !output.contains(event.target.closest('.semantic-tag'))) closeRoleMenu()
+})
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !roleMenu.hidden) { event.preventDefault(); closeRoleMenu(true) }
+})
+output.addEventListener('scroll', () => closeRoleMenu())
+window.addEventListener('scroll', () => closeRoleMenu())
 
 const defaultImportance = ['not important', 'somewhat important', 'important', 'very important', 'most important']
 
@@ -594,7 +664,7 @@ async function renderCurrent(version) {
         if (!response.ok) throw new Error(data.error || `Analysis failed (${response.status})`)
       }
       if (version !== renderVersion) return
-      sentenceResults = data.results
+      sentenceResults = data.results.map(item => ({ ...item }))
       if (currentMode === 'semantic') {
         semanticPresence = new Set(sentenceResults.map(item => item.choice))
         syncChoiceAvailability()
@@ -613,6 +683,7 @@ async function renderCurrent(version) {
 
 const debouncedRender = debounce(version => renderCurrent(version), 650)
 function scheduleRender() {
+  closeRoleMenu()
   renderVersion++
   const version = renderVersion
   debouncedRender(version)
