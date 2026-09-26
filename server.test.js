@@ -76,6 +76,46 @@ test('semantic mode uses custom choice descriptions and rejects invalid choices'
   })
 })
 
+test('rewrite sends only adjusted sentences and validates returned sentence IDs', async () => {
+  const article = 'First sentence. Second sentence.'
+  const second = splitSentences(article)[1]
+  const body = { text: article, edits: [{ id: 's1', start: second.start, end: second.end,
+    role: 'Support', targetWords: 6 }] }
+  let sent
+  let reply = { rewrites: [{ id: 's1', text: 'Here is a longer second sentence.' }] }
+  const server = createServer({ apiKey: 'test-key', clientFactory: () => ({ chat: { send: async request => {
+    sent = request.chatRequest
+    return { choices: [{ message: { content: JSON.stringify(reply) } }] }
+  } } }) })
+  const response = await request(server, '/api/rewrite', 'POST', body)
+  assert.equal(response.status, 200)
+  assert.deepEqual(response.json().rewrites, reply.rewrites)
+  const prompt = JSON.parse(sent.messages[1].content)
+  assert.equal(prompt.article, article)
+  assert.deepEqual(prompt.sentences, [
+    { id: 's1', text: second.text, role: 'Support', targetWords: 6 }
+  ])
+  assert.deepEqual(sent.reasoning, { effort: 'none' })
+  assert.equal(sent.responseFormat.type, 'json_schema')
+  const first = splitSentences(article)[0]
+  const deletion = { id: 's0', start: first.start, end: first.end, role: 'Hook', targetWords: 0 }
+  const mixed = await request(server, '/api/rewrite', 'POST', { ...body, edits: [deletion, ...body.edits] })
+  assert.equal(mixed.status, 200)
+  assert.deepEqual(mixed.json().rewrites, reply.rewrites)
+  assert.deepEqual(JSON.parse(sent.messages[1].content).sentences.map(item => item.id), ['s1'])
+  assert.equal((await request(server, '/api/rewrite', 'POST', { ...body,
+    edits: [{ ...body.edits[0], end: second.end - 1 }] })).status, 400)
+  assert.equal((await request(server, '/api/rewrite', 'POST', { ...body,
+    edits: [{ ...deletion, targetWords: -1 }] })).status, 400)
+  reply = { rewrites: [{ id: 's0', text: 'Wrong sentence.' }] }
+  assert.equal((await request(server, '/api/rewrite', 'POST', body)).status, 502)
+  const offline = createServer({ apiKey: '' })
+  assert.equal((await request(offline, '/api/rewrite', 'POST', body)).status, 503)
+  const deleted = await request(offline, '/api/rewrite', 'POST', { text: article, edits: [deletion] })
+  assert.equal(deleted.status, 200)
+  assert.deepEqual(deleted.json().rewrites, [])
+})
+
 test('server serves the app and reports missing API configuration', async () => {
   await withServer(() => { throw new Error('Should not call Jev') }, async server => {
     assert.equal((await request(server, '/')).status, 200)

@@ -469,12 +469,21 @@ let choices = defaultChoices.map(([name, description, color]) => ({ name, descri
 let mode = 'word'
 let sentenceResults = []
 let semanticPresence = null
+let originalWordCounts = []
+let targetWordCounts = []
+let segmentDrag = null
+let rewrittenById = null
+let rewriteVersion = 0
 const analysisIntensity = { sentence: 65, semantic: 65 }
 let renderVersion = 0
 const output = document.querySelector('#output_text')
 const status = document.querySelector('#analysis-status')
 const roleMenu = document.querySelector('#role-menu')
 const roleSelect = document.querySelector('#role-select')
+const roleBlocks = document.querySelector('#role-blocks')
+const segmentTooltip = document.querySelector('#segment-tooltip')
+const rewriteButton = document.querySelector('#rewrite-button')
+const rewriteStatus = document.querySelector('#rewrite-status')
 let activeRoleIndex = null
 const isGitHubPages = location.hostname.endsWith('.github.io')
 if (isGitHubPages) document.querySelector('.url-input').hidden = true
@@ -554,6 +563,215 @@ function renderSentenceHighlights() {
     last = item.end
   }
   output.innerHTML = html + escapeText(text.slice(last))
+  if (mode === 'semantic') {
+    renderRoleBlocks()
+    if (rewrittenById) renderRewrittenArticle()
+  }
+}
+
+const wordSegmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+function countWords(sentence) {
+  return Math.max(1, Array.from(wordSegmenter.segment(sentence)).filter(part => part.isWordLike).length)
+}
+
+function resetRewrite() {
+  rewriteVersion++
+  rewrittenById = null
+  document.querySelector('#rewritten-section').hidden = true
+  rewriteButton.disabled = false
+  rewriteStatus.textContent = ''
+  rewriteStatus.classList.remove('error')
+}
+
+function resetLengthTargets() {
+  originalWordCounts = sentenceResults.map(item => countWords(text.slice(item.start, item.end)))
+  targetWordCounts = [...originalWordCounts]
+  resetRewrite()
+}
+
+function semanticGroups() {
+  const groups = []
+  sentenceResults.forEach((item, index) => {
+    if (!groups.length || groups[groups.length - 1].role !== item.choice) groups.push({ role: item.choice, indices: [] })
+    groups[groups.length - 1].indices.push(index)
+  })
+  return groups
+}
+
+function updateRewriteActions() {
+  const adjusted = targetWordCounts.some((count, index) => count !== originalWordCounts[index])
+  rewriteButton.hidden = !adjusted
+  document.querySelector('#reset-lengths').hidden = !adjusted
+}
+
+function renderRoleBlocks() {
+  const section = document.querySelector('#semantic-visualization')
+  section.hidden = mode !== 'semantic' || !sentenceResults.length || targetWordCounts.length !== sentenceResults.length
+  if (section.hidden) return
+  const groups = semanticGroups()
+  const availableWidth = Math.max(1, roleBlocks.clientWidth)
+  const minimumWidth = Math.min(48, availableWidth / Math.max(...groups.map(group => group.indices.length)))
+  const segmentWidth = (index, unit) => Math.max(minimumWidth, unit * Math.sqrt(targetWordCounts[index]))
+  const groupWidth = (group, unit) => group.indices.reduce((sum, index) => sum + segmentWidth(index, unit), 0)
+  let lowerUnit = 0
+  let upperUnit = 24
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const unit = (lowerUnit + upperUnit) / 2
+    if (groups.every(group => groupWidth(group, unit) <= availableWidth)) lowerUnit = unit
+    else upperUnit = unit
+  }
+  roleBlocks.replaceChildren()
+  groups.forEach(group => {
+    const row = document.createElement('div')
+    row.className = 'role-block-row'
+    const bar = document.createElement('div')
+    bar.className = 'role-block-bar'
+    bar.style.width = `${Math.min(availableWidth, groupWidth(group, lowerUnit))}px`
+    group.indices.forEach(index => {
+      const item = sentenceResults[index]
+      const choice = choices.find(candidate => candidate.name.trim() === item.choice)
+      const probability = item.manuallyAssigned ? 1 : Math.max(0, Math.min(1, Number(item.probability)))
+      const segment = document.createElement('div')
+      segment.className = 'role-segment'
+      segment.dataset.resultIndex = String(index)
+      segment.classList.toggle('is-adjusted', targetWordCounts[index] !== originalWordCounts[index])
+      segment.style.flex = `0 0 ${segmentWidth(index, lowerUnit)}px`
+      segment.style.backgroundColor = choice ? `${choice.color}${Math.round((0.25 + 0.75 * probability) * 255).toString(16).padStart(2, '0')}` : '#6c757d'
+      const confidence = item.manuallyAssigned ? 'manually assigned' : `${Math.round(probability * 100)}% confidence`
+      const count = document.createElement('span')
+      count.className = 'role-segment-count'
+      count.textContent = targetWordCounts[index] === originalWordCounts[index]
+        ? String(originalWordCounts[index])
+        : `${targetWordCounts[index]}/${originalWordCounts[index]}`
+      const handle = document.createElement('button')
+      handle.type = 'button'
+      handle.className = 'role-segment-handle'
+      handle.setAttribute('aria-label', `Resize sentence ${index + 1}, ${item.choice}, ${targetWordCounts[index]} target words of ${originalWordCounts[index]} original words. Drag or use arrow keys to adjust; Home sets zero.`)
+      handle.addEventListener('pointerdown', event => startSegmentDrag(event, index, segment))
+      handle.addEventListener('keydown', event => {
+        const step = event.shiftKey ? 10 : 1
+        const next = event.key === 'ArrowLeft' ? targetWordCounts[index] - step
+          : event.key === 'ArrowRight' ? targetWordCounts[index] + step
+            : event.key === 'Home' ? 0 : null
+        if (next === null) return
+        event.preventDefault()
+        setSentenceTarget(index, Math.max(0, Math.min(5000, next)))
+        roleBlocks.querySelector(`.role-segment[data-result-index="${index}"] .role-segment-handle`)?.focus()
+      })
+      segment.append(count, handle)
+      bar.append(segment)
+    })
+    row.append(bar)
+    roleBlocks.append(row)
+  })
+  updateRewriteActions()
+}
+
+function setSentenceTarget(index, value) {
+  if (!Number.isInteger(value) || value < 0 || value > 5000) return
+  if (targetWordCounts[index] === value) return
+  targetWordCounts[index] = value
+  resetRewrite()
+  renderRoleBlocks()
+}
+
+function hideSegmentTooltip() {
+  segmentTooltip.hidden = true
+}
+
+function startSegmentDrag(event, index, segment) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  hideSegmentTooltip()
+  stopSegmentDrag()
+  const startWords = targetWordCounts[index]
+  const width = segment.getBoundingClientRect().width
+  const pixelsPerWord = startWords === 0 ? 8 : Math.min(10, Math.max(2, width / startWords), Math.max(1, (event.clientX - 8) / startWords))
+  segmentDrag = { pointerId: event.pointerId, index, startX: event.clientX, startWords, pixelsPerWord }
+  document.body.classList.add('is-resizing-role-segment')
+  window.addEventListener('pointermove', moveSegmentDrag)
+  window.addEventListener('pointerup', stopSegmentDrag)
+  window.addEventListener('pointercancel', stopSegmentDrag)
+}
+
+function moveSegmentDrag(event) {
+  if (!segmentDrag || event.pointerId !== segmentDrag.pointerId) return
+  const { index, startX, startWords, pixelsPerWord } = segmentDrag
+  const next = Math.max(0, Math.min(5000, startWords + Math.round((event.clientX - startX) / pixelsPerWord)))
+  setSentenceTarget(index, next)
+}
+
+function stopSegmentDrag(event) {
+  if (event && segmentDrag && event.pointerId !== segmentDrag.pointerId) return
+  segmentDrag = null
+  document.body.classList.remove('is-resizing-role-segment')
+  window.removeEventListener('pointermove', moveSegmentDrag)
+  window.removeEventListener('pointerup', stopSegmentDrag)
+  window.removeEventListener('pointercancel', stopSegmentDrag)
+}
+
+function renderRewrittenArticle() {
+  if (!rewrittenById) return
+  const host = document.querySelector('#rewritten-text')
+  let html = ''
+  let last = 0
+  let pendingGap = ''
+  let removedSinceKept = false
+  let keptCount = 0
+  for (const [index, item] of sentenceResults.entries()) {
+    const gap = text.slice(last, item.start)
+    if (targetWordCounts[index] === 0) {
+      pendingGap += gap
+      removedSinceKept = true
+      last = item.end
+      continue
+    }
+    let separator = pendingGap + gap
+    if (removedSinceKept) separator = keptCount === 0 ? '' : /\n\s*\n/.test(separator) ? '\n\n' : /\n/.test(separator) ? '\n' : /\s/.test(separator) ? ' ' : ''
+    html += escapeText(separator)
+    const sentence = escapeText(rewrittenById[`s${index}`] ?? text.slice(item.start, item.end))
+    const choice = choices.find(candidate => candidate.name.trim() === item.choice)
+    if (choice?.enabled) {
+      const probability = item.manuallyAssigned ? 1 : Math.max(0, Math.min(1, Number(item.probability)))
+      const alpha = Math.round(analysisIntensity.semantic / 100 * probability * 255).toString(16).padStart(2, '0')
+      html += `<span class="sentence-tag" style="background:${choice.color}${alpha}" title="${escapeText(item.choice)}">${sentence}</span>`
+    } else html += sentence
+    last = item.end
+    pendingGap = ''
+    removedSinceKept = false
+    keptCount++
+  }
+  host.innerHTML = keptCount ? html + (removedSinceKept ? '' : escapeText(text.slice(last))) : '<p class="empty-article">All sentences were removed.</p>'
+  const counts = new Map()
+  sentenceResults.forEach((item, index) => {
+    if (targetWordCounts[index] > 0) counts.set(item.choice, (counts.get(item.choice) || 0) + 1)
+  })
+  const list = document.querySelector('#rewritten-role-list')
+  list.replaceChildren()
+  choices.forEach(choice => {
+    const row = document.createElement('label')
+    row.className = 'rewritten-role-row'
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.checked = choice.enabled
+    checkbox.disabled = !counts.has(choice.name.trim())
+    checkbox.setAttribute('aria-label', `Show ${choice.name} in rewritten article`)
+    checkbox.addEventListener('change', () => {
+      choice.enabled = checkbox.checked
+      syncChoiceAvailability()
+      renderSentenceHighlights()
+    })
+    const swatch = document.createElement('span')
+    swatch.className = 'rewritten-role-swatch'
+    swatch.style.backgroundColor = choice.color
+    const name = document.createElement('span')
+    name.textContent = choice.name
+    const count = document.createElement('span')
+    count.className = 'rewritten-role-count'
+    count.textContent = String(counts.get(choice.name.trim()) || 0)
+    row.append(checkbox, swatch, name, count)
+    list.append(row)
+  })
 }
 
 function closeRoleMenu(restoreFocus = false) {
@@ -607,6 +825,7 @@ roleSelect.addEventListener('change', () => {
   sentenceResults[index].choice = choice.name.trim()
   sentenceResults[index].manuallyAssigned = true
   choice.enabled = true
+  resetRewrite()
   semanticPresence = new Set(sentenceResults.map(item => item.choice))
   syncChoiceAvailability()
   renderSentenceHighlights()
@@ -621,6 +840,69 @@ document.addEventListener('keydown', event => {
 output.addEventListener('scroll', () => closeRoleMenu())
 window.addEventListener('scroll', () => closeRoleMenu())
 
+roleBlocks.addEventListener('pointermove', event => {
+  if (segmentDrag) return
+  const segment = event.target.closest('.role-segment')
+  if (!segment || !roleBlocks.contains(segment)) { hideSegmentTooltip(); return }
+  const index = Number(segment.dataset.resultIndex)
+  const item = sentenceResults[index]
+  if (!item) return
+  document.querySelector('#segment-tooltip-role').textContent = `${item.choice} · Sentence ${index + 1}`
+  document.querySelector('#segment-tooltip-text').textContent = text.slice(item.start, item.end)
+  segmentTooltip.hidden = false
+  segmentTooltip.style.left = `${Math.max(8, Math.min(event.clientX + 12, innerWidth - segmentTooltip.offsetWidth - 8))}px`
+  segmentTooltip.style.top = `${Math.max(8, Math.min(event.clientY + 12, innerHeight - segmentTooltip.offsetHeight - 8))}px`
+})
+roleBlocks.addEventListener('pointerleave', hideSegmentTooltip)
+window.addEventListener('scroll', hideSegmentTooltip, true)
+window.addEventListener('resize', renderRoleBlocks)
+document.querySelector('#reset-lengths').addEventListener('click', () => {
+  stopSegmentDrag()
+  hideSegmentTooltip()
+  targetWordCounts = [...originalWordCounts]
+  resetRewrite()
+  renderRoleBlocks()
+})
+rewriteButton.addEventListener('click', async () => {
+  const edits = sentenceResults.flatMap((item, index) => targetWordCounts[index] === originalWordCounts[index] ? [] : [{
+    id: `s${index}`, start: item.start, end: item.end, role: item.choice, targetWords: targetWordCounts[index]
+  }])
+  if (!edits.length) return
+  const removedCount = edits.filter(edit => edit.targetWords === 0).length
+  const rewriteCount = edits.length - removedCount
+  const version = ++rewriteVersion
+  rewriteButton.disabled = true
+  rewriteStatus.classList.remove('error')
+  rewriteStatus.textContent = rewriteCount ? `Rewriting ${rewriteCount} sentence${rewriteCount === 1 ? '' : 's'}…` : `Removing ${removedCount} sentence${removedCount === 1 ? '' : 's'}…`
+  try {
+    let data = { rewrites: [] }
+    if (rewriteCount) {
+      if (isGitHubPages) throw new Error('Rewriting requires the local Node server with OPENROUTER_API_KEY.')
+      const response = await fetch('./api/rewrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, edits })
+      })
+      data = await response.json().catch(() => ({ error: 'Rewrite response was not valid JSON.' }))
+      if (!response.ok) throw new Error(data.error || `Rewrite failed (${response.status})`)
+    }
+    if (version !== rewriteVersion) return
+    rewrittenById = Object.fromEntries(data.rewrites.map(item => [item.id, item.text]))
+    renderRewrittenArticle()
+    document.querySelector('#rewritten-section').hidden = false
+    rewriteStatus.textContent = [
+      rewriteCount && `${rewriteCount} sentence${rewriteCount === 1 ? '' : 's'} rewritten`,
+      removedCount && `${removedCount} sentence${removedCount === 1 ? '' : 's'} removed`
+    ].filter(Boolean).join('; ') + '.'
+  } catch (error) {
+    if (version !== rewriteVersion) return
+    rewriteStatus.textContent = error.message
+    rewriteStatus.classList.add('error')
+  } finally {
+    if (version === rewriteVersion) rewriteButton.disabled = false
+  }
+})
+
 const defaultImportance = ['not important', 'somewhat important', 'important', 'very important', 'most important']
 
 async function renderCurrent(version) {
@@ -629,6 +911,7 @@ async function renderCurrent(version) {
   if (!currentText.trim()) {
     output.textContent = ''
     sentenceResults = []
+    document.querySelector('#semantic-visualization').hidden = true
     setStatus('')
     return
   }
@@ -668,6 +951,7 @@ async function renderCurrent(version) {
       if (currentMode === 'semantic') {
         semanticPresence = new Set(sentenceResults.map(item => item.choice))
         syncChoiceAvailability()
+        resetLengthTargets()
       }
       renderSentenceHighlights()
       setStatus(`${sentenceResults.length} sentences analyzed with Jev${data.cached ? ' (cached)' : ''}.`)
@@ -675,6 +959,7 @@ async function renderCurrent(version) {
   } catch (error) {
     if (version !== renderVersion) return
     output.textContent = currentText
+    document.querySelector('#semantic-visualization').hidden = true
     setStatus(error.message, true)
   } finally {
     if (version === renderVersion) output.classList.remove('is-loading')
@@ -684,6 +969,10 @@ async function renderCurrent(version) {
 const debouncedRender = debounce(version => renderCurrent(version), 650)
 function scheduleRender() {
   closeRoleMenu()
+  stopSegmentDrag()
+  hideSegmentTooltip()
+  resetRewrite()
+  document.querySelector('#semantic-visualization').hidden = true
   renderVersion++
   const version = renderVersion
   debouncedRender(version)
